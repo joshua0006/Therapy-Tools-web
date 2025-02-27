@@ -3,8 +3,60 @@ import { useNavigate } from 'react-router-dom';
 import Header from './Header';
 import Footer from './Footer';
 import Button from './Button';
-import { BookOpen, Users, GraduationCap, Award, Download, ShoppingBag, ChevronLeft, ChevronRight } from 'lucide-react';
+import { BookOpen, Users, GraduationCap, Award, Download, ShoppingBag, ChevronLeft, ChevronRight, Calendar, Clock, MapPin, ExternalLink } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
+
+// Mock data for featured events (subset of events from EventsNewsPage)
+const FEATURED_EVENTS = [
+  {
+    id: 1,
+    title: 'Annual Speech Pathology Conference',
+    date: '2024-06-15',
+    time: '9:00 AM - 5:00 PM',
+    location: 'Boston Convention Center',
+    description: 'Join us for the largest gathering of speech pathologists this year. Featuring keynote speakers, workshops, and networking opportunities.',
+    image: 'https://images.unsplash.com/photo-1540575467063-178a50c2df87?ixlib=rb-1.2.1&auto=format&fit=crop&w=800&q=80',
+    registrationLink: 'https://example.com/register'
+  },
+  {
+    id: 2,
+    title: 'Pediatric Speech Therapy Workshop',
+    date: '2024-07-22',
+    time: '10:00 AM - 3:00 PM',
+    location: 'Children\'s Hospital Auditorium',
+    description: 'A hands-on workshop focused on innovative techniques for pediatric speech therapy. Limited spots available.',
+    image: 'https://images.unsplash.com/photo-1516627145497-ae6968895b74?ixlib=rb-1.2.1&auto=format&fit=crop&w=800&q=80',
+    registrationLink: 'https://example.com/register'
+  }
+];
+
+// Mock data for featured news (subset of news from EventsNewsPage)
+const FEATURED_NEWS = [
+  {
+    id: 1,
+    title: 'New Research Shows Benefits of Early Intervention in Speech Therapy',
+    date: '2024-05-28',
+    author: 'Dr. Sarah Johnson',
+    summary: 'A groundbreaking study published in the Journal of Speech Pathology demonstrates significant improvements in outcomes when speech therapy begins before age 3.',
+    image: 'https://images.unsplash.com/photo-1551966775-a4ddc8df052b?ixlib=rb-1.2.1&auto=format&fit=crop&w=800&q=80',
+    readMoreLink: 'https://example.com/article'
+  },
+  {
+    id: 2,
+    title: 'FDA Approves New Speech Therapy Device for Stroke Patients',
+    date: '2024-05-15',
+    author: 'Michael Chen',
+    summary: 'The FDA has granted approval for a revolutionary new device designed to assist stroke patients in regaining speech capabilities through targeted neural stimulation.',
+    image: 'https://images.unsplash.com/photo-1576091160550-2173dba999ef?ixlib=rb-1.2.1&auto=format&fit=crop&w=800&q=80',
+    readMoreLink: 'https://example.com/article'
+  }
+];
+
+// Format date to readable format
+const formatDate = (dateString: string) => {
+  const options: Intl.DateTimeFormatOptions = { year: 'numeric', month: 'long', day: 'numeric' };
+  return new Date(dateString).toLocaleDateString('en-US', options);
+};
 
 const HomePage: React.FC = () => {
   const { isLoggedIn } = useAuth();
@@ -160,56 +212,7 @@ const HomePage: React.FC = () => {
         </div>
       </div>
 
-      {/* Featured Categories */}
-      <div className="py-16">
-        <div className="container mx-auto px-4">
-          <h2 className="text-3xl font-bold text-center text-gray-800 mb-12">
-            Popular <span className="text-[#2bcd82]">Categories</span>
-          </h2>
-          
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-            {[
-              {
-                title: "Articulation",
-                image: "https://images.unsplash.com/photo-1599942514572-8d873e843c16?ixlib=rb-1.2.1&auto=format&fit=crop&w=800&q=80",
-                url: "/catalog?category=articulation"
-              },
-              {
-                title: "Language",
-                image: "https://images.unsplash.com/photo-1497633762265-9d179a990aa6?ixlib=rb-1.2.1&auto=format&fit=crop&w=800&q=80",
-                url: "/catalog?category=language"
-              },
-              {
-                title: "Social Skills",
-                image: "https://images.unsplash.com/photo-1529156069898-49953e39b3ac?ixlib=rb-1.2.1&auto=format&fit=crop&w=800&q=80",
-                url: "/catalog?category=social"
-              },
-              {
-                title: "Assessment",
-                image: "https://images.unsplash.com/photo-1454165804606-c3d57bc86b40?ixlib=rb-1.2.1&auto=format&fit=crop&w=800&q=80",
-                url: "/catalog?category=assessment"
-              }
-            ].map((category, index) => (
-              <div 
-                key={index} 
-                className="bg-white rounded-lg overflow-hidden shadow-md hover:shadow-lg transition-all hover:-translate-y-1 cursor-pointer"
-                onClick={() => navigate(category.url)}
-              >
-                <div className="h-48 overflow-hidden">
-                  <img 
-                    src={category.image} 
-                    alt={category.title} 
-                    className="w-full h-full object-cover transition-transform hover:scale-105"
-                  />
-                </div>
-                <div className="p-4 text-center">
-                  <h3 className="text-xl font-bold text-gray-800">{category.title}</h3>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      </div>
+      
 
       {/* Member Benefits */}
       <div className="py-16 bg-gray-100">
@@ -313,6 +316,78 @@ const HomePage: React.FC = () => {
           </div>
         </div>
       </div>
+
+      {/* Featured Section - Events & News */}
+      <section className="py-16 bg-gray-50">
+        <div className="container mx-auto px-4">
+          <div className="text-center mb-12">
+            <h2 className="text-3xl font-bold text-gray-800 mb-4">Stay Connected</h2>
+            <p className="text-lg text-gray-600 max-w-3xl mx-auto">
+              Keep up with the latest events, workshops, and news in the speech pathology community.
+            </p>
+          </div>
+          
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+            {/* Events Preview */}
+            <div className="bg-white rounded-lg shadow-md overflow-hidden">
+              <div className="h-64 overflow-hidden">
+                <img 
+                  src="https://images.unsplash.com/photo-1540575467063-178a50c2df87?ixlib=rb-1.2.1&auto=format&fit=crop&w=800&q=80" 
+                  alt="Speech pathology event" 
+                  className="w-full h-full object-cover"
+                />
+              </div>
+              <div className="p-6">
+                <h3 className="text-2xl font-bold text-gray-800 mb-3">Upcoming Events</h3>
+                <p className="text-gray-600 mb-4">
+                  Discover conferences, workshops, and networking opportunities for speech-language pathologists.
+                </p>
+                <Button 
+                  variant="secondary" 
+                  size="medium"
+                  onClick={() => navigate('/events-news')}
+                >
+                  View Events
+                </Button>
+              </div>
+            </div>
+            
+            {/* News Preview */}
+            <div className="bg-white rounded-lg shadow-md overflow-hidden">
+              <div className="h-64 overflow-hidden">
+                <img 
+                  src="https://images.unsplash.com/photo-1551966775-a4ddc8df052b?ixlib=rb-1.2.1&auto=format&fit=crop&w=800&q=80" 
+                  alt="Speech pathology news" 
+                  className="w-full h-full object-cover"
+                />
+              </div>
+              <div className="p-6">
+                <h3 className="text-2xl font-bold text-gray-800 mb-3">Latest News</h3>
+                <p className="text-gray-600 mb-4">
+                  Stay informed about the latest research, trends, and developments in speech pathology.
+                </p>
+                <Button 
+                  variant="secondary" 
+                  size="medium"
+                  onClick={() => navigate('/events-news')}
+                >
+                  Read News
+                </Button>
+              </div>
+            </div>
+          </div>
+          
+          <div className="text-center mt-10">
+            <Button 
+              variant="primary" 
+              size="large"
+              onClick={() => navigate('/events-news')}
+            >
+              Explore All Events & News
+            </Button>
+          </div>
+        </div>
+      </section>
 
       {/* Testimonials */}
       <div className="bg-gradient-to-br from-[#fb6a69]/5 to-[#2bcd82]/5 py-20">

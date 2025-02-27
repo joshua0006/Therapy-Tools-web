@@ -8,10 +8,12 @@ import CheckoutPage from './components/CheckoutPage'
 import PaymentSuccessPage from './components/PaymentSuccessPage'
 import DashboardPage from './components/DashboardPage'
 import ResourceDetailPage from './components/ResourceDetailPage'
+import EventsNewsPage from './components/EventsNewsPage'
 import ScrollToTop from './components/ScrollToTop'
 import { AuthProvider } from './context/AuthContext'
 import { CartProvider } from './context/CartContext'
 import { Toaster } from 'react-hot-toast'
+import Cart from './components/Cart'
 
 // Error boundary component to catch errors
 class ErrorBoundaryComponent extends React.Component<
@@ -79,6 +81,7 @@ const App: React.FC = () => {
                 },
               }}
             />
+            <Cart />
             <Suspense fallback={<div className="p-4 text-center">Loading...</div>}>
               <Routes>
                 <Route path="/" element={<HomePage />} />
@@ -88,6 +91,7 @@ const App: React.FC = () => {
                 <Route path="/payment-success" element={<PaymentSuccessPage />} />
                 <Route path="/dashboard" element={<DashboardPage />} />
                 <Route path="/resource/:resourceId" element={<ResourceDetailPage />} />
+                <Route path="/events-news" element={<EventsNewsPage />} />
               </Routes>
             </Suspense>
           </Router>

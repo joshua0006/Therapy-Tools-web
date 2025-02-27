@@ -1,28 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { ShoppingBag, CreditCard, LogIn, User, Menu, X, ShoppingCart, FileText } from 'lucide-react';
+import { ShoppingBag, CreditCard, LogIn, User, Menu, X, FileText, Bell } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
-import { useCart } from '../context/CartContext';
 import Logo from '../assets/images/cicle-logo.png';
-import Cart from './Cart';
 
 const Header: React.FC = () => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isLoaded, setIsLoaded] = useState(false);
   const { isLoggedIn, login, logout } = useAuth();
   const navigate = useNavigate();
-  
-  // Get cart info with error handling
-  let cartItemCount = 0;
-  let setIsCartOpen: (isOpen: boolean) => void = () => {};
-  
-  try {
-    const cart = useCart();
-    cartItemCount = cart.getTotalItems();
-    setIsCartOpen = cart.setIsCartOpen;
-  } catch (error) {
-    console.error("Failed to load cart in header:", error);
-  }
   
   // Use effect to mark component as loaded after initial render
   useEffect(() => {
@@ -50,26 +36,14 @@ const Header: React.FC = () => {
             <Link to="/plans" className="text-gray-700 hover:text-[#2bcd82] font-medium transition-colors flex items-center">
               <CreditCard className="w-5 h-5 mr-2" /> Membership
             </Link>
+            <Link to="/events-news" className="text-gray-700 hover:text-[#2bcd82] font-medium transition-colors flex items-center">
+              <Bell className="w-5 h-5 mr-2" /> Events & News
+            </Link>
             
             {isLoggedIn && (
               <Link to="/dashboard" className="text-gray-700 hover:text-[#2bcd82] font-medium transition-colors flex items-center">
                 <FileText className="w-5 h-5 mr-2" /> My Library
               </Link>
-            )}
-            
-            {/* Cart Button */}
-            {isLoaded && (
-              <button 
-                className="text-gray-700 hover:text-[#2bcd82] font-medium transition-colors flex items-center relative"
-                onClick={() => setIsCartOpen(true)}
-              >
-                <ShoppingCart className="w-5 h-5 mr-2" /> Cart
-                {cartItemCount > 0 && (
-                  <span className="absolute -top-2 -right-2 bg-[#fb6a69] text-white text-xs rounded-full h-5 w-5 flex items-center justify-center">
-                    {cartItemCount}
-                  </span>
-                )}
-              </button>
             )}
             
             {isLoggedIn ? (
@@ -95,23 +69,8 @@ const Header: React.FC = () => {
             )}
           </nav>
           
-          {/* Mobile Menu Button and Cart Button */}
+          {/* Mobile Menu Button */}
           <div className="md:hidden flex items-center">
-            {/* Mobile Cart Button */}
-            {isLoaded && (
-              <button 
-                className="text-gray-700 hover:text-[#2bcd82] font-medium transition-colors mr-4 relative"
-                onClick={() => setIsCartOpen(true)}
-              >
-                <ShoppingCart className="w-5 h-5" />
-                {cartItemCount > 0 && (
-                  <span className="absolute -top-2 -right-2 bg-[#fb6a69] text-white text-xs rounded-full h-5 w-5 flex items-center justify-center">
-                    {cartItemCount}
-                  </span>
-                )}
-              </button>
-            )}
-            
             <button 
               className="text-gray-700"
               onClick={() => setIsMenuOpen(!isMenuOpen)}
@@ -139,6 +98,13 @@ const Header: React.FC = () => {
                 onClick={() => setIsMenuOpen(false)}
               >
                 <CreditCard className="w-5 h-5 mr-2" /> Membership
+              </Link>
+              <Link 
+                to="/events-news" 
+                className="text-gray-700 hover:text-[#2bcd82] font-medium transition-colors flex items-center"
+                onClick={() => setIsMenuOpen(false)}
+              >
+                <Bell className="w-5 h-5 mr-2" /> Events & News
               </Link>
               
               {isLoggedIn && (
@@ -178,9 +144,6 @@ const Header: React.FC = () => {
           </div>
         )}
       </header>
-      
-      {/* Cart Drawer */}
-      <Cart />
     </>
   );
 };
