@@ -79,7 +79,7 @@ const ResourceDetailPage: React.FC = () => {
   ];
 
   // Default addToCart function that shows error toast
-  let addToCart = (item: any) => {
+  let addToCart = (_resource: any) => {
     toast.error("Unable to add to cart. Please try reloading the page.");
   };
   

@@ -1,9 +1,9 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import Header from './Header';
 import Footer from './Footer';
 import Button from './Button';
-import StripePayment from './StripePayment';
+// import StripePayment from './StripePayment';
 import PayPalPayment from './PayPalPayment';
 import { CreditCard, CircleDollarSign, ShieldCheck, Lock, CheckCircle2 } from 'lucide-react';
 import { useCart, CartItem } from '../context/CartContext';

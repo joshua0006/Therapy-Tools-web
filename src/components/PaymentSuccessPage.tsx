@@ -15,7 +15,6 @@ const PaymentSuccessPage: React.FC = () => {
   const location = useLocation();
   const navigate = useNavigate();
   const [verificationStatus, setVerificationStatus] = useState<'loading' | 'success' | 'error'>('loading');
-  const [errorMessage, setErrorMessage] = useState<string | null>(null);
   
   // Extract payment data from location state
   const state = location.state as LocationState;
@@ -31,6 +30,8 @@ const PaymentSuccessPage: React.FC = () => {
     }
     
     // Verify the payment status with the server
+    // Commented out for now as it's not being used
+    /*
     const verifyPayment = async () => {
       try {
         const response = await fetch('/api/verify-payment', {
@@ -44,23 +45,17 @@ const PaymentSuccessPage: React.FC = () => {
           }),
         });
         
-        const data = await response.json();
-        
-        if (response.ok && data.success) {
-          setVerificationStatus('success');
-        } else {
-          setVerificationStatus('error');
-          setErrorMessage(data.error || 'Failed to verify payment');
+        if (!response.ok) {
+          throw new Error('Failed to verify payment');
         }
+        
+        const data = await response.json();
+        console.log('Payment verified:', data);
       } catch (error) {
         console.error('Error verifying payment:', error);
-        setVerificationStatus('error');
-        setErrorMessage('An error occurred while verifying your payment');
       }
     };
-    
-    // Simulate verification (in a real app, uncomment the verifyPayment call)
-    // verifyPayment();
+    */
     
     // For demo purposes, we'll simulate a successful verification after a delay
     const timer = setTimeout(() => {
@@ -126,11 +121,6 @@ const PaymentSuccessPage: React.FC = () => {
               <p className="text-gray-600 mb-4">
                 We're sorry, but we couldn't verify your payment.
               </p>
-              {errorMessage && (
-                <div className="bg-red-100 text-red-700 p-4 rounded-lg mb-6">
-                  {errorMessage}
-                </div>
-              )}
               <div className="border-t border-gray-200 pt-6 mt-6">
                 <p className="text-gray-600 mb-6">
                   If you believe this is an error, please contact our support team or try making the payment again.

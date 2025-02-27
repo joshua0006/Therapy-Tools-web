@@ -6,6 +6,7 @@ interface ButtonProps {
   size?: 'small' | 'medium' | 'large';
   className?: string;
   onClick?: () => void;
+  disabled?: boolean;
 }
 
 const Button: React.FC<ButtonProps> = ({
@@ -14,6 +15,7 @@ const Button: React.FC<ButtonProps> = ({
   size = 'medium',
   className = '',
   onClick,
+  disabled = false,
 }) => {
   const baseClasses = 'font-bold rounded-full shadow-lg transition-colors';
   
@@ -28,10 +30,13 @@ const Button: React.FC<ButtonProps> = ({
     large: 'py-4 px-8 text-lg',
   };
   
+  const disabledClasses = disabled ? 'opacity-50 cursor-not-allowed' : '';
+  
   return (
     <button
-      className={`${baseClasses} ${variantClasses[variant]} ${sizeClasses[size]} ${className}`}
+      className={`${baseClasses} ${variantClasses[variant]} ${sizeClasses[size]} ${disabledClasses} ${className}`}
       onClick={onClick}
+      disabled={disabled}
     >
       {children}
     </button>

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Header from './Header';
 import Footer from './Footer';
@@ -21,7 +21,7 @@ const CatalogPage: React.FC = () => {
   const navigate = useNavigate();
   
   // Default addToCart function that shows error toast
-  let addToCart = (item: any) => {
+  let addToCart = (_resource: any) => {
     toast.error("Unable to add to cart. Please try reloading the page.");
   };
   
