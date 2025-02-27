@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { ShoppingBag, CreditCard, LogIn, User, Menu, X, FileText, Bell } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
@@ -6,14 +6,8 @@ import Logo from '../assets/images/cicle-logo.png';
 
 const Header: React.FC = () => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
-  const [isLoaded, setIsLoaded] = useState(false);
   const { isLoggedIn, login, logout } = useAuth();
   const navigate = useNavigate();
-  
-  // Use effect to mark component as loaded after initial render
-  useEffect(() => {
-    setIsLoaded(true);
-  }, []);
   
   return (
     <>

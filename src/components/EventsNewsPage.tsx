@@ -1,12 +1,49 @@
-import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import React, { useState } from 'react';
 import Header from './Header';
 import Footer from './Footer';
-import Button from './Button';
-import { Calendar, Clock, MapPin, ExternalLink, Bell, FileText, ChevronRight, Search } from 'lucide-react';
+import { Calendar, Clock, MapPin, ExternalLink, Bell, ChevronRight, Search } from 'lucide-react';
+
+// Define types for events and news
+interface Event {
+  id: number;
+  title: string;
+  date: string;
+  time: string;
+  location: string;
+  description: string;
+  image: string;
+  registrationLink: string;
+}
+
+interface News {
+  id: number;
+  title: string;
+  date: string;
+  author: string;
+  summary: string;
+  image: string;
+  readMoreLink: string;
+}
+
+// Define a type for combined content items
+interface CombinedContentItem {
+  id: number;
+  title: string;
+  date: string;
+  image: string;
+  type: 'event' | 'news';
+  sortDate: Date;
+  time?: string;
+  location?: string;
+  description?: string;
+  registrationLink?: string;
+  author?: string;
+  summary?: string;
+  readMoreLink?: string;
+}
 
 // Mock data for events
-const MOCK_EVENTS = [
+const MOCK_EVENTS: Event[] = [
   {
     id: 1,
     title: 'Annual Speech Pathology Conference',
@@ -50,7 +87,7 @@ const MOCK_EVENTS = [
 ];
 
 // Mock data for news articles
-const MOCK_NEWS = [
+const MOCK_NEWS: News[] = [
   {
     id: 1,
     title: 'New Research Shows Benefits of Early Intervention in Speech Therapy',
@@ -105,7 +142,6 @@ const formatDate = (dateString: string) => {
 };
 
 const EventsNewsPage: React.FC = () => {
-  const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState<'all' | 'events' | 'news'>('all');
   const [searchTerm, setSearchTerm] = useState('');
   
@@ -121,13 +157,13 @@ const EventsNewsPage: React.FC = () => {
   );
   
   // Combined and sorted content for "All" tab
-  const combinedContent = [...filteredEvents.map(event => ({
+  const combinedContent: CombinedContentItem[] = [...filteredEvents.map(event => ({
     ...event,
-    type: 'event',
+    type: 'event' as const,
     sortDate: new Date(event.date)
   })), ...filteredNews.map(news => ({
     ...news,
-    type: 'news',
+    type: 'news' as const,
     sortDate: new Date(news.date)
   }))].sort((a, b) => b.sortDate.getTime() - a.sortDate.getTime());
 
@@ -194,11 +230,11 @@ const EventsNewsPage: React.FC = () => {
         {/* Content Grid */}
         <div className="grid grid-cols-1 gap-6">
           {/* Show content based on active tab */}
-          {activeTab === 'all' && combinedContent.map((item: any) => (
+          {activeTab === 'all' && combinedContent.map((item) => (
             item.type === 'event' ? (
-              <EventCard key={`event-${item.id}`} event={item} showCategory={true} />
+              <EventCard key={`event-${item.id}`} event={item as Event} showCategory={true} />
             ) : (
-              <NewsCard key={`news-${item.id}`} news={item} showCategory={true} />
+              <NewsCard key={`news-${item.id}`} news={item as News} showCategory={true} />
             )
           ))}
           
@@ -223,8 +259,6 @@ const EventsNewsPage: React.FC = () => {
             </div>
           )}
         </div>
-        
-      
       </main>
       
       <Footer />
@@ -234,16 +268,7 @@ const EventsNewsPage: React.FC = () => {
 
 // Event Card Component
 interface EventProps {
-  event: {
-    id: number;
-    title: string;
-    date: string;
-    time: string;
-    location: string;
-    description: string;
-    image: string;
-    registrationLink: string;
-  };
+  event: Event;
   showCategory?: boolean;
 }
 
@@ -298,15 +323,7 @@ const EventCard: React.FC<EventProps> = ({ event, showCategory = false }) => {
 
 // News Card Component
 interface NewsProps {
-  news: {
-    id: number;
-    title: string;
-    date: string;
-    author: string;
-    summary: string;
-    image: string;
-    readMoreLink: string;
-  };
+  news: News;
   showCategory?: boolean;
 }
 

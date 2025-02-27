@@ -212,7 +212,145 @@ const HomePage: React.FC = () => {
         </div>
       </div>
 
-      
+      {/* News and Events Section - Replacing Popular Categories */}
+      <div className="py-16">
+        <div className="container mx-auto px-4">
+          <h2 className="text-3xl font-bold text-center text-gray-800 mb-4">
+            Latest <span className="text-[#2bcd82]">News</span> & <span className="text-[#fb6a69]">Events</span>
+          </h2>
+          <p className="text-center text-gray-600 max-w-3xl mx-auto mb-12">
+            Stay updated with the latest happenings in the speech pathology community
+          </p>
+          
+          <div className="space-y-8">
+            {/* Events Section */}
+            <div>
+              <h3 className="text-2xl font-bold text-[#fb6a69] mb-4 flex items-center">
+                <Calendar className="w-6 h-6 mr-2" /> Upcoming Events
+              </h3>
+              <div className="space-y-6">
+                {FEATURED_EVENTS.map(event => (
+                  <div key={event.id} className="bg-white rounded-lg overflow-hidden shadow-md hover:shadow-lg transition-shadow flex flex-col md:flex-row">
+                    {/* Image on the left */}
+                    <div className="md:w-1/3 h-48 md:h-auto overflow-hidden relative">
+                      <img 
+                        src={event.image} 
+                        alt={event.title} 
+                        className="w-full h-full object-cover transition-transform hover:scale-105 duration-300"
+                      />
+                      <div className="absolute top-3 left-3 bg-[#fb6a69] text-white text-xs font-bold px-2 py-1 rounded">
+                        EVENT
+                      </div>
+                    </div>
+                    
+                    {/* Content on the right */}
+                    <div className="md:w-2/3 p-5 flex flex-col justify-between">
+                      <div>
+                        <div className="flex items-center text-[#fb6a69] text-sm mb-2">
+                          <Calendar className="w-4 h-4 mr-1" />
+                          <span>{formatDate(event.date)}</span>
+                        </div>
+                        <h3 className="text-xl font-bold text-gray-800 mb-2">{event.title}</h3>
+                        <div className="flex items-center text-gray-600 text-sm mb-2">
+                          <Clock className="w-4 h-4 mr-1" />
+                          <span>{event.time}</span>
+                        </div>
+                        <div className="flex items-center text-gray-600 text-sm mb-3">
+                          <MapPin className="w-4 h-4 mr-1" />
+                          <span>{event.location}</span>
+                        </div>
+                        <p className="text-gray-600 mb-4 line-clamp-2">{event.description}</p>
+                      </div>
+                      
+                      <div className="flex justify-between items-center">
+                        <a 
+                          href={event.registrationLink}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center text-[#2bcd82] hover:text-[#25b975] font-medium transition-colors"
+                        >
+                          Register Now <ChevronRight className="w-4 h-4 ml-1" />
+                        </a>
+                        
+                        <button 
+                          onClick={() => navigate('/events-news?tab=events')}
+                          className="text-gray-500 hover:text-gray-700 text-sm transition-colors"
+                        >
+                          View Details
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+            
+            {/* News Section */}
+            <div>
+              <h3 className="text-2xl font-bold text-[#2bcd82] mb-4 flex items-center">
+                <ExternalLink className="w-6 h-6 mr-2" /> Latest News
+              </h3>
+              <div className="space-y-6">
+                {FEATURED_NEWS.map(news => (
+                  <div key={news.id} className="bg-white rounded-lg overflow-hidden shadow-md hover:shadow-lg transition-shadow flex flex-col md:flex-row">
+                    {/* Image on the left */}
+                    <div className="md:w-1/3 h-48 md:h-auto overflow-hidden relative">
+                      <img 
+                        src={news.image} 
+                        alt={news.title} 
+                        className="w-full h-full object-cover transition-transform hover:scale-105 duration-300"
+                      />
+                      <div className="absolute top-3 left-3 bg-[#2bcd82] text-white text-xs font-bold px-2 py-1 rounded">
+                        NEWS
+                      </div>
+                    </div>
+                    
+                    {/* Content on the right */}
+                    <div className="md:w-2/3 p-5 flex flex-col justify-between">
+                      <div>
+                        <div className="flex items-center justify-between text-sm mb-2">
+                          <span className="text-[#fb6a69]">{formatDate(news.date)}</span>
+                          <span className="text-gray-600">By {news.author}</span>
+                        </div>
+                        <h3 className="text-xl font-bold text-gray-800 mb-3">{news.title}</h3>
+                        <p className="text-gray-600 mb-4 line-clamp-3">{news.summary}</p>
+                      </div>
+                      
+                      <div className="flex justify-between items-center">
+                        <a 
+                          href={news.readMoreLink}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center text-[#2bcd82] hover:text-[#25b975] font-medium transition-colors"
+                        >
+                          Read More <ExternalLink className="w-4 h-4 ml-1" />
+                        </a>
+                        
+                        <button 
+                          onClick={() => navigate('/events-news?tab=news')}
+                          className="text-gray-500 hover:text-gray-700 text-sm transition-colors"
+                        >
+                          View Details
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+            
+            <div className="text-center mt-8">
+              <Button 
+                variant="primary" 
+                size="large"
+                onClick={() => navigate('/events-news')}
+              >
+                View All News & Events
+              </Button>
+            </div>
+          </div>
+        </div>
+      </div>
 
       {/* Member Benefits */}
       <div className="py-16 bg-gray-100">
