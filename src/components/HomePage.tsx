@@ -3,60 +3,10 @@ import { useNavigate } from 'react-router-dom';
 import Header from './Header';
 import Footer from './Footer';
 import Button from './Button';
-import { BookOpen, Users, GraduationCap, Award, Download, ShoppingBag, ChevronLeft, ChevronRight, Calendar, Clock, MapPin, ExternalLink } from 'lucide-react';
+import { BookOpen, Users, GraduationCap, Award, Download, ShoppingBag, ChevronLeft, ChevronRight} from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 
-// Mock data for featured events (subset of events from EventsNewsPage)
-const FEATURED_EVENTS = [
-  {
-    id: 1,
-    title: 'Annual Speech Pathology Conference',
-    date: '2024-06-15',
-    time: '9:00 AM - 5:00 PM',
-    location: 'Boston Convention Center',
-    description: 'Join us for the largest gathering of speech pathologists this year. Featuring keynote speakers, workshops, and networking opportunities.',
-    image: 'https://images.unsplash.com/photo-1540575467063-178a50c2df87?ixlib=rb-1.2.1&auto=format&fit=crop&w=800&q=80',
-    registrationLink: 'https://example.com/register'
-  },
-  {
-    id: 2,
-    title: 'Pediatric Speech Therapy Workshop',
-    date: '2024-07-22',
-    time: '10:00 AM - 3:00 PM',
-    location: 'Children\'s Hospital Auditorium',
-    description: 'A hands-on workshop focused on innovative techniques for pediatric speech therapy. Limited spots available.',
-    image: 'https://images.unsplash.com/photo-1516627145497-ae6968895b74?ixlib=rb-1.2.1&auto=format&fit=crop&w=800&q=80',
-    registrationLink: 'https://example.com/register'
-  }
-];
 
-// Mock data for featured news (subset of news from EventsNewsPage)
-const FEATURED_NEWS = [
-  {
-    id: 1,
-    title: 'New Research Shows Benefits of Early Intervention in Speech Therapy',
-    date: '2024-05-28',
-    author: 'Dr. Sarah Johnson',
-    summary: 'A groundbreaking study published in the Journal of Speech Pathology demonstrates significant improvements in outcomes when speech therapy begins before age 3.',
-    image: 'https://images.unsplash.com/photo-1551966775-a4ddc8df052b?ixlib=rb-1.2.1&auto=format&fit=crop&w=800&q=80',
-    readMoreLink: 'https://example.com/article'
-  },
-  {
-    id: 2,
-    title: 'FDA Approves New Speech Therapy Device for Stroke Patients',
-    date: '2024-05-15',
-    author: 'Michael Chen',
-    summary: 'The FDA has granted approval for a revolutionary new device designed to assist stroke patients in regaining speech capabilities through targeted neural stimulation.',
-    image: 'https://images.unsplash.com/photo-1576091160550-2173dba999ef?ixlib=rb-1.2.1&auto=format&fit=crop&w=800&q=80',
-    readMoreLink: 'https://example.com/article'
-  }
-];
-
-// Format date to readable format
-const formatDate = (dateString: string) => {
-  const options: Intl.DateTimeFormatOptions = { year: 'numeric', month: 'long', day: 'numeric' };
-  return new Date(dateString).toLocaleDateString('en-US', options);
-};
 
 const HomePage: React.FC = () => {
   const { isLoggedIn } = useAuth();
