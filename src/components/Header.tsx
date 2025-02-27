@@ -25,7 +25,7 @@ const Header: React.FC = () => {
           {/* Desktop Navigation */}
           <nav className="hidden md:flex items-center space-x-6">
             <Link to="/catalog" className="text-gray-700 hover:text-[#2bcd82] font-medium transition-colors flex items-center">
-              <ShoppingBag className="w-5 h-5 mr-2" /> Resources
+              <ShoppingBag className="w-5 h-5 mr-2" /> Catalogs
             </Link>
             <Link to="/plans" className="text-gray-700 hover:text-[#2bcd82] font-medium transition-colors flex items-center">
               <CreditCard className="w-5 h-5 mr-2" /> Membership
@@ -84,7 +84,7 @@ const Header: React.FC = () => {
                 className="text-gray-700 hover:text-[#2bcd82] font-medium transition-colors flex items-center"
                 onClick={() => setIsMenuOpen(false)}
               >
-                <ShoppingBag className="w-5 h-5 mr-2" /> Resources
+                <ShoppingBag className="w-5 h-5 mr-2" /> Catalogs
               </Link>
               <Link 
                 to="/plans" 
