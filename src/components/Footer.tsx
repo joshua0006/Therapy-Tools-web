@@ -40,9 +40,9 @@ const Footer: React.FC = () => {
           <div className="grid grid-cols-1 md:grid-cols-4 gap-8">
             <div>
               <div className="flex items-center mb-4">
-                <img src={Logo} alt="Adventures in Speech Pathology" className="h-10 w-10 mr-2" />
+                <img src={Logo} alt="Journeys in Communication Pathology" className="h-10 w-10 mr-2" />
                 <h3 className="text-xl font-bold">
-                  <span className="text-[#2bcd82]">Adventures</span> in <span className="text-[#fb6a69]">Speech</span>
+                  <span className="text-[#2bcd82]">Journeys</span> in <span className="text-[#fb6a69]">Communication</span>
                 </h3>
               </div>
               <p className="text-gray-300 mb-6">
@@ -110,7 +110,7 @@ const Footer: React.FC = () => {
         <div className="container mx-auto px-4">
           <div className="flex flex-col md:flex-row justify-between items-center">
             <p className="text-gray-400 text-sm mb-4 md:mb-0">
-              &copy; {new Date().getFullYear()} Adventures in Speech Pathology. All rights reserved.
+              &copy; {new Date().getFullYear()} Journeys in Communication Pathology. All rights reserved.
             </p>
             <div className="flex space-x-6">
               <Link to="/privacy" className="text-gray-400 hover:text-[#2bcd82] text-sm transition-colors">Privacy Policy</Link>

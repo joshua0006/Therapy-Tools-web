@@ -58,7 +58,7 @@ const CatalogPage: React.FC = () => {
       title: "Speech Therapy Games Collection",
       description: "Fun and engaging games designed to support speech therapy sessions.",
       category: "Activities",
-      imageUrl: "https://images.unsplash.com/photo-1559131583-f176a2eb61db?ixlib=rb-1.2.1&auto=format&fit=crop&w=800&q=80",
+      imageUrl: "https://images.unsplash.com/photo-1516733968668-dbdce39c4651?ixlib=rb-1.2.1&auto=format&fit=crop&w=800&q=80",
       price: "$29.99"
     },
     {

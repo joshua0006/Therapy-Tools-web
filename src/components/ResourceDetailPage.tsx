@@ -49,7 +49,7 @@ const ResourceDetailPage: React.FC = () => {
       title: "Speech Therapy Games Collection",
       description: "Fun and engaging games designed to support speech therapy sessions. This collection includes 10 printable game boards, card sets, and activity sheets that make therapy sessions enjoyable while targeting specific speech and language goals. Suitable for individual or group therapy sessions.",
       category: "Activities",
-      imageUrl: "https://images.unsplash.com/photo-1559131583-f176a2eb61db?ixlib=rb-1.2.1&auto=format&fit=crop&w=800&q=80",
+      imageUrl: "https://images.unsplash.com/photo-1516733968668-dbdce39c4651?ixlib=rb-1.2.1&auto=format&fit=crop&w=800&q=80",
       price: "$29.99"
     },
     {
