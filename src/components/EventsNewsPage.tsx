@@ -71,7 +71,7 @@ const MOCK_EVENTS: Event[] = [
     time: '6:00 PM - 8:00 PM',
     location: 'Online (Zoom)',
     description: 'Connect with fellow SLPs from around the country in this virtual networking event. Share experiences and build your professional network.',
-    image: 'https://images.unsplash.com/photo-1609234656432-603fd648aeb7?ixlib=rb-1.2.1&auto=format&fit=crop&w=800&q=80',
+    image: 'https://images.unsplash.com/photo-1516733968668-dbdce39c4651?ixlib=rb-1.2.1&auto=format&fit=crop&w=800&q=80',
     registrationLink: 'https://example.com/register'
   },
   {

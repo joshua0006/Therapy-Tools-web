@@ -14,6 +14,7 @@ import { AuthProvider } from './context/AuthContext'
 import { CartProvider } from './context/CartContext'
 import { Toaster } from 'react-hot-toast'
 import Cart from './components/Cart'
+import MonthlyArticlesPage from './components/MonthlyArticlesPage'
 
 // Error boundary component to catch errors
 class ErrorBoundaryComponent extends React.Component<
@@ -92,6 +93,7 @@ const App: React.FC = () => {
                 <Route path="/dashboard" element={<DashboardPage />} />
                 <Route path="/resource/:resourceId" element={<ResourceDetailPage />} />
                 <Route path="/events-news" element={<EventsNewsPage />} />
+                <Route path="/monthly-articles" element={<MonthlyArticlesPage />} />
               </Routes>
             </Suspense>
           </Router>

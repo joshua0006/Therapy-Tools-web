@@ -49,7 +49,7 @@ const ResourceDetailPage: React.FC = () => {
       title: "Speech Therapy Games Collection",
       description: "Fun and engaging games designed to support speech therapy sessions. This collection includes 10 printable game boards, card sets, and activity sheets that make therapy sessions enjoyable while targeting specific speech and language goals. Suitable for individual or group therapy sessions.",
       category: "Activities",
-      imageUrl: "https://images.unsplash.com/photo-1559131583-f176a2eb61db?ixlib=rb-1.2.1&auto=format&fit=crop&w=800&q=80",
+      imageUrl: "https://images.unsplash.com/photo-1516733968668-dbdce39c4651?ixlib=rb-1.2.1&auto=format&fit=crop&w=800&q=80",
       price: "$29.99"
     },
     {
@@ -273,47 +273,175 @@ const ResourceDetailPage: React.FC = () => {
           </div>
         </div>
         
-        {/* Related Resources Section */}
+        {/* Featured Catalog Items */}
         <div className="mt-12">
-          <h2 className="text-2xl font-bold text-gray-800 mb-6">Related Resources</h2>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            {resources
-              .filter(r => r.id !== resource.id && r.category === resource.category)
-              .slice(0, 3)
-              .map(relatedResource => (
-                <div 
-                  key={relatedResource.id} 
-                  className="bg-white rounded-lg overflow-hidden shadow-md hover:shadow-lg transition-shadow cursor-pointer"
-                  onClick={() => navigate(`/resource/${relatedResource.id}`)}
-                >
-                  <img 
-                    src={relatedResource.imageUrl} 
-                    alt={relatedResource.title} 
-                    className="w-full h-48 object-cover"
-                  />
-                  <div className="p-4">
-                    <div className="flex justify-between items-start mb-2">
-                      <h3 className="text-lg font-bold text-gray-800">{relatedResource.title}</h3>
-                      <span className="bg-[#2bcd82]/10 text-[#2bcd82] font-medium px-2 py-1 rounded-full text-sm">
-                        {relatedResource.category}
-                      </span>
-                    </div>
-                    <p className="text-gray-600 mb-4 line-clamp-2">{relatedResource.description}</p>
-                    <div className="flex justify-between items-center">
-                      <span className="text-lg font-bold text-[#fb6a69]">{relatedResource.price}</span>
-                      <button 
-                        className="text-[#2bcd82] hover:underline text-sm"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          navigate(`/resource/${relatedResource.id}`);
-                        }}
-                      >
-                        View Details
-                      </button>
-                    </div>
+          <div className="flex justify-between items-center mb-6">
+            <h2 className="text-2xl font-bold text-gray-800">Featured Catalog Items</h2>
+            <a href="/catalog" className="text-[#fb6a69] hover:text-[#e05554] font-medium flex items-center">
+              View More
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 ml-1" viewBox="0 0 20 20" fill="currentColor">
+                <path fillRule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clipRule="evenodd" />
+              </svg>
+            </a>
+          </div>
+          
+          <div className="flex flex-col sm:flex-row gap-6">
+            {/* Card 1 - FEATURED - Speech Therapy Events */}
+            <div className="w-full sm:w-1/3 rounded-xl border border-gray-200 overflow-hidden shadow-md hover:shadow-lg transition duration-300 hover:-translate-y-1 flex flex-col h-[420px]">
+              <div className="relative h-48 flex-shrink-0 overflow-hidden">
+                <span className="absolute top-3 left-3 px-3 py-1 rounded-full text-xs font-semibold text-white bg-gradient-to-r from-[#fb6a69] to-[#e05554] shadow-md z-10">
+                  FEATURED
+                </span>
+                <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/70 to-transparent p-3 z-10">
+                  <span className="text-white font-bold">$39.99</span>
+                </div>
+                <img 
+                  src="https://images.unsplash.com/photo-1516383274620-63dbfa9b56bd?ixlib=rb-1.2.1&auto=format&fit=crop&w=500&q=60" 
+                  alt="Speech Therapy Card Deck" 
+                  className="w-full h-full object-cover transition-transform duration-300 hover:scale-105"
+                />
+                <div className="absolute top-3 right-3 flex items-center z-10">
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-yellow-400 fill-current" viewBox="0 0 24 24">
+                    <path d="M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z" />
+                  </svg>
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-yellow-400 fill-current" viewBox="0 0 24 24">
+                    <path d="M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z" />
+                  </svg>
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-yellow-400 fill-current" viewBox="0 0 24 24">
+                    <path d="M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z" />
+                  </svg>
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-yellow-400 fill-current" viewBox="0 0 24 24">
+                    <path d="M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z" />
+                  </svg>
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-gray-300" viewBox="0 0 24 24">
+                    <path d="M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z" />
+                  </svg>
+                </div>
+              </div>
+              <div className="p-4 flex flex-col h-full">
+                <div className="flex-grow">
+                  <h3 className="text-lg font-semibold text-gray-800 line-clamp-1 mb-2">Annual Speech Therapy Conference</h3>
+                  <p className="text-gray-600 text-sm line-clamp-3">
+                    Join leading experts for our annual conference on the latest advancements in speech therapy techniques and research findings. Network with peers and earn CEU credits.
+                  </p>
+                </div>
+                <div className="mt-auto pt-4 border-t border-gray-100">
+                  <div className="flex justify-between items-center">
+                    <button className="px-4 py-2 bg-[#fb6a69] hover:bg-[#e05554] text-white rounded transition duration-300 text-sm font-medium flex-1 mr-2">
+                      Add to Cart
+                    </button>
+                    <a href="/events" className="px-4 py-2 border border-[#2bcd82] text-[#2bcd82] hover:bg-[#2bcd82] hover:text-white rounded transition duration-300 text-sm font-medium text-center flex-1">
+                      View Events
+                    </a>
                   </div>
                 </div>
-              ))}
+              </div>
+            </div>
+
+            {/* Card 2 - NEW - News Article */}
+            <div className="w-full sm:w-1/3 rounded-xl border border-gray-200 overflow-hidden shadow-md hover:shadow-lg transition duration-300 hover:-translate-y-1 flex flex-col h-[420px]">
+              <div className="relative h-48 flex-shrink-0 overflow-hidden">
+                <span className="absolute top-3 left-3 px-3 py-1 rounded-full text-xs font-semibold text-white bg-gradient-to-r from-[#2bcd82] to-[#25b674] shadow-md z-10">
+                  NEW
+                </span>
+                <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/70 to-transparent p-3 z-10">
+                  <span className="text-white font-bold">$24.99</span>
+                </div>
+                <img 
+                  src="https://images.unsplash.com/photo-1543269865-cbf427effbad?ixlib=rb-1.2.1&auto=format&fit=crop&w=500&q=60" 
+                  alt="Language Development Workbook" 
+                  className="w-full h-full object-cover transition-transform duration-300 hover:scale-105"
+                />
+                <div className="absolute top-3 right-3 flex items-center z-10">
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-yellow-400 fill-current" viewBox="0 0 24 24">
+                    <path d="M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z" />
+                  </svg>
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-yellow-400 fill-current" viewBox="0 0 24 24">
+                    <path d="M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z" />
+                  </svg>
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-yellow-400 fill-current" viewBox="0 0 24 24">
+                    <path d="M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z" />
+                  </svg>
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-gray-300" viewBox="0 0 24 24">
+                    <path d="M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z" />
+                  </svg>
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-gray-300" viewBox="0 0 24 24">
+                    <path d="M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z" />
+                  </svg>
+                </div>
+              </div>
+              <div className="p-4 flex flex-col h-full">
+                <div className="flex-grow">
+                  <h3 className="text-lg font-semibold text-gray-800 line-clamp-1 mb-2">New Research in Early Intervention</h3>
+                  <p className="text-gray-600 text-sm line-clamp-3">
+                    Groundbreaking study reveals the benefits of early speech therapy intervention for children under five. Researchers found significant improvements in language acquisition and social communication skills.
+                  </p>
+                </div>
+                <div className="mt-auto pt-4 border-t border-gray-100">
+                  <div className="flex justify-between items-center">
+                    <button className="px-4 py-2 bg-[#fb6a69] hover:bg-[#e05554] text-white rounded transition duration-300 text-sm font-medium flex-1 mr-2">
+                      Add to Cart
+                    </button>
+                    <a href="/news" className="px-4 py-2 border border-[#2bcd82] text-[#2bcd82] hover:bg-[#2bcd82] hover:text-white rounded transition duration-300 text-sm font-medium text-center flex-1">
+                      Read News
+                    </a>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Card 3 - SALE - Product */}
+            <div className="w-full sm:w-1/3 rounded-xl border border-gray-200 overflow-hidden shadow-md hover:shadow-lg transition duration-300 hover:-translate-y-1 flex flex-col h-[420px]">
+              <div className="relative h-48 flex-shrink-0 overflow-hidden">
+                <span className="absolute top-3 left-3 px-3 py-1 rounded-full text-xs font-semibold text-white bg-gradient-to-r from-orange-500 to-orange-600 shadow-md z-10">
+                  SALE
+                </span>
+                <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/70 to-transparent p-3 z-10">
+                  <span className="text-white font-bold">$19.99</span>
+                  <span className="text-gray-300 line-through text-sm ml-2">$29.99</span>
+                </div>
+                <img 
+                  src="https://images.unsplash.com/photo-1456406644174-8ddd4cd52a06?ixlib=rb-1.2.1&auto=format&fit=crop&w=500&q=60" 
+                  alt="Articulation Assessment Kit" 
+                  className="w-full h-full object-cover transition-transform duration-300 hover:scale-105"
+                />
+                <div className="absolute top-3 right-3 flex items-center z-10">
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-yellow-400 fill-current" viewBox="0 0 24 24">
+                    <path d="M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z" />
+                  </svg>
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-yellow-400 fill-current" viewBox="0 0 24 24">
+                    <path d="M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z" />
+                  </svg>
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-yellow-400 fill-current" viewBox="0 0 24 24">
+                    <path d="M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z" />
+                  </svg>
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-yellow-400 fill-current" viewBox="0 0 24 24">
+                    <path d="M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z" />
+                  </svg>
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-yellow-400 fill-current" viewBox="0 0 24 24">
+                    <path d="M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z" />
+                  </svg>
+                </div>
+              </div>
+              <div className="p-4 flex flex-col h-full">
+                <div className="flex-grow">
+                  <h3 className="text-lg font-semibold text-gray-800 line-clamp-1 mb-2">Articulation Assessment Kit</h3>
+                  <p className="text-gray-600 text-sm line-clamp-3">
+                    Complete assessment toolkit for speech-language pathologists, including visual aids, recording sheets, and progress trackers. Designed for clinical and educational settings.
+                  </p>
+                </div>
+                <div className="mt-auto pt-4 border-t border-gray-100">
+                  <div className="flex justify-between items-center">
+                    <button className="px-4 py-2 bg-[#fb6a69] hover:bg-[#e05554] text-white rounded transition duration-300 text-sm font-medium flex-1 mr-2">
+                      Add to Cart
+                    </button>
+                    <a href="/resource/3" className="px-4 py-2 border border-[#2bcd82] text-[#2bcd82] hover:bg-[#2bcd82] hover:text-white rounded transition duration-300 text-sm font-medium text-center flex-1">
+                      View Details
+                    </a>
+                  </div>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       </main>

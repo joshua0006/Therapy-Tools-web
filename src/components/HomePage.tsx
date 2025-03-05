@@ -18,7 +18,7 @@ const HomePage: React.FC = () => {
     "https://images.unsplash.com/photo-1516733968668-dbdce39c4651?ixlib=rb-1.2.1&auto=format&fit=crop&w=800&q=80",
     "https://images.unsplash.com/photo-1576267423445-b2e0074d68a4?ixlib=rb-1.2.1&auto=format&fit=crop&w=800&q=80",
     "https://images.unsplash.com/photo-1607453998774-d533f65dac99?ixlib=rb-1.2.1&auto=format&fit=crop&w=800&q=80",
-    "https://images.unsplash.com/photo-1612439487053-b47e2ccc507a?ixlib=rb-1.2.1&auto=format&fit=crop&w=800&q=80"
+    "https://images.unsplash.com/photo-1576267423445-b2e0074d68a4?ixlib=rb-1.2.1&auto=format&fit=crop&w=800&q=80"
   ];
 
   // Auto-rotate carousel
@@ -214,19 +214,19 @@ const HomePage: React.FC = () => {
                 title: "Articulation Worksheets Bundle",
                 image: "https://images.unsplash.com/photo-1503676260728-1c00da094a0b?ixlib=rb-1.2.1&auto=format&fit=crop&w=800&q=80",
                 price: "$19.99",
-                url: "/catalog/articulation-bundle"
+                url: "/resource/1"
               },
               {
                 title: "Language Development Assessment",
                 image: "https://images.unsplash.com/photo-1434030216411-0b793f4b4173?ixlib=rb-1.2.1&auto=format&fit=crop&w=800&q=80",
                 price: "$24.99",
-                url: "/catalog/language-assessment"
+                url: "/resource/2"
               },
               {
                 title: "Speech Therapy Games Collection",
                 image: "https://images.unsplash.com/photo-1559131583-f176a2eb61db?ixlib=rb-1.2.1&auto=format&fit=crop&w=800&q=80",
                 price: "$29.99",
-                url: "/catalog/therapy-games"
+                url: "/resource/3"
               }
             ].map((product, index) => (
               <div 

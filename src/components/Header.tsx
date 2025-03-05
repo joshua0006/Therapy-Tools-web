@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { ShoppingBag, CreditCard, LogIn, User, Menu, X, FileText, Bell } from 'lucide-react';
+import { ShoppingBag, CreditCard, LogIn, User, Menu, X, FileText, Bell, BookOpen } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import Logo from '../assets/images/cicle-logo.png';
 
@@ -35,9 +35,14 @@ const Header: React.FC = () => {
             </Link>
             
             {isLoggedIn && (
-              <Link to="/dashboard" className="text-gray-700 hover:text-[#2bcd82] font-medium transition-colors flex items-center">
-                <FileText className="w-5 h-5 mr-2" /> My Library
-              </Link>
+              <>
+                <Link to="/monthly-articles" className="text-gray-700 hover:text-[#2bcd82] font-medium transition-colors flex items-center">
+                  <BookOpen className="w-5 h-5 mr-2" /> Monthly Articles
+                </Link>
+                <Link to="/dashboard" className="text-gray-700 hover:text-[#2bcd82] font-medium transition-colors flex items-center">
+                  <FileText className="w-5 h-5 mr-2" /> My Library
+                </Link>
+              </>
             )}
             
             {isLoggedIn ? (
@@ -102,13 +107,22 @@ const Header: React.FC = () => {
               </Link>
               
               {isLoggedIn && (
-                <Link 
-                  to="/dashboard" 
-                  className="text-gray-700 hover:text-[#2bcd82] font-medium transition-colors flex items-center"
-                  onClick={() => setIsMenuOpen(false)}
-                >
-                  <FileText className="w-5 h-5 mr-2" /> My Library
-                </Link>
+                <>
+                  <Link 
+                    to="/monthly-articles" 
+                    className="text-gray-700 hover:text-[#2bcd82] font-medium transition-colors flex items-center"
+                    onClick={() => setIsMenuOpen(false)}
+                  >
+                    <BookOpen className="w-5 h-5 mr-2" /> Monthly Articles
+                  </Link>
+                  <Link 
+                    to="/dashboard" 
+                    className="text-gray-700 hover:text-[#2bcd82] font-medium transition-colors flex items-center"
+                    onClick={() => setIsMenuOpen(false)}
+                  >
+                    <FileText className="w-5 h-5 mr-2" /> My Library
+                  </Link>
+                </>
               )}
               
               {isLoggedIn ? (
