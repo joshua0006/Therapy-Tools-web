@@ -21,7 +21,7 @@ const Logo: React.FC<LogoProps> = ({
     ? '/assets/logo-round.png' 
     : '/assets/logo-long.png';
 
-  const altText = 'Journeys in Communication Pathology Logo';
+  const altText = 'Adventures in Speech Logo';
 
   return (
     <img 

@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { ShoppingBag, CreditCard, LogIn, User, Menu, X, FileText, Bell, BookOpen } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
-
+import Logo from '../assets/images/cicle-logo.png';
 
 const Header: React.FC = () => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
@@ -14,10 +14,10 @@ const Header: React.FC = () => {
       <header className="bg-white shadow-md sticky top-0 z-50">
         <div className="container mx-auto px-4 py-3 flex justify-between items-center">
           <Link to="/" className="flex items-center">
-
+            <img src={Logo} alt="Adventures in Speech" className="h-10 w-10 mr-2" />
             <div className="hidden sm:block">
               <h1 className="text-2xl md:text-3xl font-bold">
-                <span className="text-[#2bcd82]">Journeys</span> <span className="text-gray-800">in</span> <span className="text-[#fb6a69]">Communication</span>
+                <span className="text-[#2bcd82]">Adventures</span> <span className="text-gray-800">in</span> <span className="text-[#fb6a69]">Speech</span>
               </h1>
             </div>
           </Link>
