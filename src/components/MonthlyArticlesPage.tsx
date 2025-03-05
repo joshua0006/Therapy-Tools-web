@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Header from './Header';
 import Footer from './Footer';
-import { Calendar, User, BookOpen, Download, ChevronRight, Search, Lock } from 'lucide-react';
+import { Calendar, User, BookOpen, Download, Search, Lock } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 
 // Interface for monthly articles
