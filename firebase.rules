@@ -1,0 +1,26 @@
+// Firestore Rules
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Users collection - Allow users to read and write their own data
+    match /users/{userId} {
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+    }
+    
+    // Admin access for development - REMOVE THIS IN PRODUCTION
+    match /users/{userId} {
+      allow read, write: if true;
+    }
+    
+    // Purchases collection - Allow users to read and write their own purchase data
+    match /purchases/{purchaseId} {
+      allow read: if request.auth != null && request.auth.uid == resource.data.userId;
+      allow create: if request.auth != null && request.auth.uid == request.resource.data.userId;
+    }
+    
+    // Admin access for development - REMOVE THIS IN PRODUCTION
+    match /purchases/{purchaseId} {
+      allow read, write: if true;
+    }
+  }
+} 

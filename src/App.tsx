@@ -12,9 +12,14 @@ import EventsNewsPage from './components/EventsNewsPage'
 import ScrollToTop from './components/ScrollToTop'
 import { AuthProvider } from './context/AuthContext'
 import { CartProvider } from './context/CartContext'
+import { WooCommerceProvider } from './context/WooCommerceContext'
+import { EventsNewsProvider } from './context/EventsNewsContext'
 import { Toaster } from 'react-hot-toast'
 import Cart from './components/Cart'
 import MonthlyArticlesPage from './components/MonthlyArticlesPage'
+import PrivacyPolicyPage from './components/PrivacyPolicyPage'
+import UserPurchasesPage from './components/UserPurchasesPage'
+import SignIn from './components/SignIn'
 
 // Error boundary component to catch errors
 class ErrorBoundaryComponent extends React.Component<
@@ -58,45 +63,52 @@ const App: React.FC = () => {
     <ErrorBoundaryComponent>
       <AuthProvider>
         <CartProvider>
-          <Router>
-            <ScrollToTop />
-            <Toaster 
-              position="top-right"
-              toastOptions={{
-                duration: 3000,
-                style: {
-                  background: '#363636',
-                  color: '#fff',
-                },
-                success: {
-                  iconTheme: {
-                    primary: '#2bcd82',
-                    secondary: '#fff',
-                  },
-                },
-                error: {
-                  iconTheme: {
-                    primary: '#fb6a69',
-                    secondary: '#fff',
-                  },
-                },
-              }}
-            />
-            <Cart />
-            <Suspense fallback={<div className="p-4 text-center">Loading...</div>}>
-              <Routes>
-                <Route path="/" element={<HomePage />} />
-                <Route path="/catalog" element={<CatalogPage />} />
-                <Route path="/plans" element={<PlansPage />} />
-                <Route path="/checkout" element={<CheckoutPage />} />
-                <Route path="/payment-success" element={<PaymentSuccessPage />} />
-                <Route path="/dashboard" element={<DashboardPage />} />
-                <Route path="/resource/:resourceId" element={<ResourceDetailPage />} />
-                <Route path="/events-news" element={<EventsNewsPage />} />
-                <Route path="/monthly-articles" element={<MonthlyArticlesPage />} />
-              </Routes>
-            </Suspense>
-          </Router>
+          <WooCommerceProvider>
+            <EventsNewsProvider>
+              <Router>
+                <ScrollToTop />
+                <Toaster 
+                  position="top-right"
+                  toastOptions={{
+                    duration: 3000,
+                    style: {
+                      background: '#363636',
+                      color: '#fff',
+                    },
+                    success: {
+                      iconTheme: {
+                        primary: '#2bcd82',
+                        secondary: '#fff',
+                      },
+                    },
+                    error: {
+                      iconTheme: {
+                        primary: '#fb6a69',
+                        secondary: '#fff',
+                      },
+                    },
+                  }}
+                />
+                <Cart />
+                <Suspense fallback={<div className="p-4 text-center">Loading...</div>}>
+                  <Routes>
+                    <Route path="/" element={<HomePage />} />
+                    <Route path="/catalog" element={<CatalogPage />} />
+                    <Route path="/plans" element={<PlansPage />} />
+                    <Route path="/checkout" element={<CheckoutPage />} />
+                    <Route path="/payment-success" element={<PaymentSuccessPage />} />
+                    <Route path="/dashboard" element={<DashboardPage />} />
+                    <Route path="/purchases" element={<UserPurchasesPage />} />
+                    <Route path="/resource/:resourceId" element={<ResourceDetailPage />} />
+                    <Route path="/events-news" element={<EventsNewsPage />} />
+                    <Route path="/monthly-articles" element={<MonthlyArticlesPage />} />
+                    <Route path="/privacy" element={<PrivacyPolicyPage />} />
+                    <Route path="/signin" element={<SignIn />} />
+                  </Routes>
+                </Suspense>
+              </Router>
+            </EventsNewsProvider>
+          </WooCommerceProvider>
         </CartProvider>
       </AuthProvider>
     </ErrorBoundaryComponent>

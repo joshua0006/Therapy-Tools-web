@@ -7,6 +7,15 @@ import Button from './Button';
 import PayPalPayment from './PayPalPayment';
 import { CreditCard, CircleDollarSign, ShieldCheck, Lock, CheckCircle2 } from 'lucide-react';
 import { useCart, CartItem } from '../context/CartContext';
+import { useAuth } from '../context/AuthContext';
+
+// Import or define card brand images
+const CARD_LOGOS = {
+  visa: "https://cdn.jsdelivr.net/gh/stephenhutchings/typicons.font@master/src/svg/credit-card.svg",
+  mastercard: "https://cdn.jsdelivr.net/gh/stephenhutchings/typicons.font@master/src/svg/credit-card.svg",
+  amex: "https://cdn.jsdelivr.net/gh/stephenhutchings/typicons.font@master/src/svg/credit-card.svg",
+  paypal: "https://www.paypalobjects.com/webstatic/mktg/logo/pp_cc_mark_37x23.jpg"
+};
 
 interface CheckoutPageProps {
   productId?: string; // Optional product ID from URL
@@ -15,6 +24,7 @@ interface CheckoutPageProps {
 const CheckoutPage: React.FC<CheckoutPageProps> = ({ productId }) => {
   const navigate = useNavigate();
   const location = useLocation();
+  const { recordUserPurchase, isLoggedIn, user } = useAuth();
   const [paymentMethod, setPaymentMethod] = useState<'stripe' | 'paypal' | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
   const [paymentComplete, setPaymentComplete] = useState(false);
@@ -129,27 +139,77 @@ const CheckoutPage: React.FC<CheckoutPageProps> = ({ productId }) => {
     setPaymentError(null);
   };
 
-  const handlePaymentComplete = (success: boolean, id?: string, error?: string) => {
+  const handlePaymentComplete = async (success: boolean, transactionId?: string, error?: string) => {
     setIsProcessing(false);
     
-    if (success && id) {
+    if (success && transactionId) {
       setPaymentComplete(true);
-      setPaymentId(id);
+      setPaymentId(transactionId);
       
-      // In a real application, you would make a request to your server
-      // to verify the payment was completed and update the user's membership
+      // Record purchase in Firebase if user is logged in
+      if (isLoggedIn && user) {
+        try {
+          let purchaseItems;
+          
+          // If buying a plan
+          if (selectedPlan) {
+            purchaseItems = [{
+              id: selectedPlan.id,
+              type: 'plan',
+              name: selectedPlan.name,
+              price: (selectedPlan.amount / 100).toFixed(2),
+              quantity: 1
+            }];
+          } 
+          // If checking out cart items
+          else if (cartItems.length > 0) {
+            purchaseItems = cartItems.map(item => ({
+              id: item.id,
+              type: 'product',
+              name: item.title,
+              description: item.description,
+              category: item.category,
+              price: item.price.replace('$', ''),
+              quantity: item.quantity,
+              imageUrl: item.imageUrl
+            }));
+          }
+          
+          // Record the purchase
+          await recordUserPurchase({
+            items: purchaseItems,
+            total: selectedPlan ? (selectedPlan.amount / 100).toFixed(2) : getTotalPrice().toFixed(2),
+            transactionId,
+            paymentMethod: paymentMethod || 'unknown',
+            purchaseDate: new Date().toISOString()
+          });
+          
+          // Clear cart after successful purchase
+          if (cartItems.length > 0) {
+            try {
+              const cart = useCart();
+              cart.clearCart();
+            } catch (error) {
+              console.error("Failed to clear cart after purchase:", error);
+            }
+          }
+        } catch (error) {
+          console.error("Failed to record purchase:", error);
+          // Still consider the purchase successful even if recording fails
+        }
+      }
       
       // Redirect to success page after a short delay
       setTimeout(() => {
         navigate('/payment-success', { 
           state: { 
-            paymentId: id,
+            paymentId: transactionId,
             productName: showCartItems ? 'Your Cart Items' : product.name 
           } 
         });
       }, 2000);
-    } else {
-      setPaymentError(error || 'An unknown error occurred');
+    } else if (error) {
+      setPaymentError(error);
     }
   };
 
@@ -257,16 +317,16 @@ const CheckoutPage: React.FC<CheckoutPageProps> = ({ productId }) => {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="bg-[#f8f9fa]">
       <Header />
       
-      <div className="container mx-auto px-4 py-12">
-        <h1 className="text-3xl font-bold text-center mb-8">Secure Checkout</h1>
+      <div className="container mx-auto px-4 py-8 md:py-12">
+        <h1 className="text-2xl md:text-3xl font-bold text-center mb-8 text-[#2d3748]">Checkout</h1>
         
         {paymentComplete ? (
-          <div className="max-w-md mx-auto bg-white p-8 rounded-lg shadow-md">
+          <div className="max-w-md mx-auto bg-white p-8 rounded-lg shadow-sm">
             <div className="text-center">
-              <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
+              <div className="w-16 h-16 bg-green-50 rounded-full flex items-center justify-center mx-auto mb-4">
                 <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8 text-green-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                 </svg>
@@ -284,11 +344,11 @@ const CheckoutPage: React.FC<CheckoutPageProps> = ({ productId }) => {
             </div>
           </div>
         ) : (
-          <div className="grid grid-cols-1 lg:grid-cols-5 gap-8">
-            {/* Contact Information - Left Column */}
-            <div className="lg:col-span-3 space-y-6">
-              <div className="bg-white p-6 rounded-lg shadow-md">
-                <h2 className="text-xl font-bold mb-4">Contact Information</h2>
+          <div className="flex flex-col lg:flex-row gap-8">
+            {/* Left Column - Order Details */}
+            <div className="w-full lg:w-1/2 order-2 lg:order-1">
+              <div className="bg-white rounded-lg shadow-sm p-6 mb-6">
+                <h2 className="text-xl font-semibold mb-4 pb-3 border-b border-gray-100">Your Information</h2>
                 
                 <div className="mb-4">
                   <label className="block text-sm font-medium text-gray-700 mb-1">Email Address*</label>
@@ -297,39 +357,54 @@ const CheckoutPage: React.FC<CheckoutPageProps> = ({ productId }) => {
                     name="email"
                     value={contactInfo.email}
                     onChange={handleContactInfoChange}
-                    className="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-[#2bcd82] focus:border-transparent"
+                    className="w-full p-3 border border-gray-300 rounded-md focus:ring-1 focus:ring-[#2bcd82] focus:border-[#2bcd82] transition-colors"
                     placeholder="your@email.com"
                     required
                   />
-                  <p className="mt-1 text-sm text-gray-500">Your receipt and download links will be sent to this email</p>
+                  <p className="mt-1 text-xs text-gray-500">Your receipt and download links will be sent to this email</p>
                 </div>
               </div>
               
               {/* Payment Method Section */}
-              <div className="bg-white p-6 rounded-lg shadow-md">
-                <h2 className="text-xl font-bold mb-4">Payment Method</h2>
+              <div className="bg-white rounded-lg shadow-sm p-6">
+                <h2 className="text-xl font-semibold mb-4 pb-3 border-b border-gray-100">Payment Method</h2>
                 
                 {!paymentMethod ? (
-                  <div className="space-y-4">
+                  <div className="space-y-3">
                     <button
                       onClick={() => handlePaymentMethodSelect('stripe')}
-                      className="w-full p-4 border border-gray-300 rounded-lg flex items-center hover:border-[#2bcd82] transition-colors"
+                      className="w-full p-4 border border-gray-200 rounded-md flex items-center hover:border-[#2bcd82] hover:bg-gray-50 transition-all"
                     >
-                      <CreditCard className="w-6 h-6 text-[#2bcd82] mr-3" />
-                      <span className="font-medium">Credit/Debit Card</span>
+                      <div className="w-10 h-10 rounded-full bg-[#f0fdf4] flex items-center justify-center mr-3">
+                        <CreditCard className="w-5 h-5 text-[#2bcd82]" />
+                      </div>
+                      <div className="flex-1">
+                        <span className="font-medium block text-gray-800">Credit/Debit Card</span>
+                        <span className="text-xs text-gray-500">Visa, Mastercard, American Express</span>
+                      </div>
+                      <div className="flex items-center space-x-1">
+                        
+                        <img src="https://cdn.iconscout.com/icon/free/png-256/free-american-express-3-226448.png" alt="Amex" className="h-6 w-10" />
+                      </div>
                     </button>
                     
                     <button
                       onClick={() => handlePaymentMethodSelect('paypal')}
-                      className="w-full p-4 border border-gray-300 rounded-lg flex items-center hover:border-[#2bcd82] transition-colors"
+                      className="w-full p-4 border border-gray-200 rounded-md flex items-center hover:border-[#2bcd82] hover:bg-gray-50 transition-all"
                     >
-                      <CircleDollarSign className="w-6 h-6 text-[#2bcd82] mr-3" />
-                      <span className="font-medium">PayPal</span>
+                      <div className="w-10 h-10 rounded-full bg-[#f0f9ff] flex items-center justify-center mr-3">
+                        <CircleDollarSign className="w-5 h-5 text-[#0070ba]" />
+                      </div>
+                      <div className="flex-1">
+                        <span className="font-medium block text-gray-800">PayPal</span>
+                        <span className="text-xs text-gray-500">Fast and secure checkout</span>
+                      </div>
+                      <img src="https://www.paypalobjects.com/webstatic/mktg/logo/pp_cc_mark_74x46.jpg" alt="PayPal" className="h-6 w-10" />
                     </button>
                   </div>
                 ) : (
                   <div>
-                    <div className="mb-6">
+                    <div className="mb-4">
                       <button
                         onClick={() => setPaymentMethod(null)}
                         className="text-sm text-[#2bcd82] hover:text-[#25b975] flex items-center"
@@ -342,28 +417,38 @@ const CheckoutPage: React.FC<CheckoutPageProps> = ({ productId }) => {
                     </div>
                     
                     {paymentError && (
-                      <div className="bg-red-100 text-red-700 p-3 rounded-lg mb-4">
+                      <div className="bg-red-50 text-red-600 p-3 rounded-md mb-4 text-sm">
                         {paymentError}
                       </div>
                     )}
                     
                     {paymentMethod === 'stripe' && (
                       <div>
-                        <h3 className="text-lg font-medium mb-4">Payment Details</h3>
+                        <div className="mb-5 flex items-center">
+                          <span className="text-sm font-medium text-gray-600 mr-auto">Secure credit card payment</span>
+                          <div className="flex items-center space-x-1">
+                            <img src="https://cdn.iconscout.com/icon/free/png-256/free-american-express-3-226448.png" alt="Amex" className="h-6 w-10" />
+                          </div>
+                        </div>
                         
                         <div className="mb-6 space-y-4">
                           <div>
                             <label className="block text-sm font-medium text-gray-700 mb-1">Card Number</label>
-                            <input
-                              type="text"
-                              placeholder="1234 5678 9012 3456"
-                              className={`w-full p-2 border ${cardError.number ? 'border-red-500' : 'border-gray-300'} rounded-md focus:ring-2 focus:ring-[#2bcd82] focus:border-transparent`}
-                              maxLength={19}
-                              value={cardNumber}
-                              onChange={handleCardNumberChange}
-                            />
+                            <div className="relative">
+                              <input
+                                type="text"
+                                placeholder="1234 5678 9012 3456"
+                                className={`w-full p-3 border ${cardError.number ? 'border-red-500' : 'border-gray-300'} rounded-md focus:ring-1 focus:ring-[#2bcd82] focus:border-[#2bcd82] pl-10`}
+                                maxLength={19}
+                                value={cardNumber}
+                                onChange={handleCardNumberChange}
+                              />
+                              <div className="absolute left-0 top-0 h-full flex items-center pl-3">
+                                <CreditCard className="w-4 h-4 text-gray-400" />
+                              </div>
+                            </div>
                             {cardError.number && (
-                              <p className="mt-1 text-sm text-red-600">{cardError.number}</p>
+                              <p className="mt-1 text-xs text-red-600">{cardError.number}</p>
                             )}
                           </div>
                           
@@ -373,13 +458,13 @@ const CheckoutPage: React.FC<CheckoutPageProps> = ({ productId }) => {
                               <input
                                 type="text"
                                 placeholder="MM/YY"
-                                className={`w-full p-2 border ${cardError.expiry ? 'border-red-500' : 'border-gray-300'} rounded-md focus:ring-2 focus:ring-[#2bcd82] focus:border-transparent`}
+                                className={`w-full p-3 border ${cardError.expiry ? 'border-red-500' : 'border-gray-300'} rounded-md focus:ring-1 focus:ring-[#2bcd82] focus:border-[#2bcd82]`}
                                 maxLength={5}
                                 value={cardExpiry}
                                 onChange={handleCardExpiryChange}
                               />
                               {cardError.expiry && (
-                                <p className="mt-1 text-sm text-red-600">{cardError.expiry}</p>
+                                <p className="mt-1 text-xs text-red-600">{cardError.expiry}</p>
                               )}
                             </div>
                             <div>
@@ -387,42 +472,38 @@ const CheckoutPage: React.FC<CheckoutPageProps> = ({ productId }) => {
                               <input
                                 type="text"
                                 placeholder="123"
-                                className={`w-full p-2 border ${cardError.cvc ? 'border-red-500' : 'border-gray-300'} rounded-md focus:ring-2 focus:ring-[#2bcd82] focus:border-transparent`}
+                                className={`w-full p-3 border ${cardError.cvc ? 'border-red-500' : 'border-gray-300'} rounded-md focus:ring-1 focus:ring-[#2bcd82] focus:border-[#2bcd82]`}
                                 maxLength={3}
                                 value={cardCvc}
                                 onChange={handleCardCvcChange}
                               />
                               {cardError.cvc && (
-                                <p className="mt-1 text-sm text-red-600">{cardError.cvc}</p>
+                                <p className="mt-1 text-xs text-red-600">{cardError.cvc}</p>
                               )}
                             </div>
                           </div>
                         </div>
                         
-                        <div className="flex justify-between items-center mb-6">
-                          <span className="text-gray-700 font-medium">Amount:</span>
-                          <span className="text-[#fb6a69] font-bold">
-                            ${showCartItems 
-                              ? getTotalPrice().toFixed(2) 
-                              : (product.amount / 100).toFixed(2)}
-                          </span>
+                        <div className="flex items-center mb-4 text-xs text-gray-600">
+                          <Lock className="w-3 h-3 mr-1 text-gray-500" />
+                          <p>Your payment information is secured with SSL encryption</p>
                         </div>
                         
                         <button 
-                          className={`w-full ${isProcessing ? 'bg-gray-400 cursor-not-allowed' : 'bg-[#2bcd82] hover:bg-[#25b975]'} text-white font-medium py-3 px-4 rounded-full transition-colors flex justify-center items-center`}
+                          className={`w-full ${isProcessing ? 'bg-gray-400 cursor-not-allowed' : 'bg-[#2bcd82] hover:bg-[#25b975]'} text-white font-medium py-3 px-4 rounded-md transition-colors flex justify-center items-center`}
                           onClick={handleCardPayment}
                           disabled={isProcessing}
                         >
                           {isProcessing ? (
                             <>
-                              <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                              <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
                                 <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                                 <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                               </svg>
                               Processing...
                             </>
                           ) : (
-                            `Pay $${showCartItems ? getTotalPrice().toFixed(2) : (product.amount / 100).toFixed(2)}`
+                            <>Complete Purchase</>
                           )}
                         </button>
                       </div>
@@ -465,46 +546,20 @@ const CheckoutPage: React.FC<CheckoutPageProps> = ({ productId }) => {
                     )}
                   </div>
                 )}
-                
-                {/* Trust Indicators - Moved to separate section */}
-                <div className="mt-8 border-t border-gray-200 pt-6">
-                  <div className="flex justify-center items-center mb-4 bg-gray-50 py-3 rounded-lg">
-                    <ShieldCheck className="h-6 w-6 text-green-600 mr-2" />
-                    <h3 className="text-lg font-semibold text-gray-800">Guaranteed Safe Checkout</h3>
-                  </div>
-                  
-                  <div className="flex justify-center space-x-8 mb-4">
-                    <div className="flex items-center">
-                      <Lock className="h-5 w-5 text-gray-600 mr-2" />
-                      <span className="text-sm text-gray-600">Secure SSL Encryption</span>
-                    </div>
-                    <div className="flex items-center">
-                      <CheckCircle2 className="h-5 w-5 text-gray-600 mr-2" />
-                      <span className="text-sm text-gray-600">Money-Back Guarantee</span>
-                    </div>
-                  </div>
-                  
-                  <div className="flex justify-center space-x-6 mt-4">
-                    <img src="https://cdn.pixabay.com/photo/2015/05/26/09/37/paypal-784404_1280.png" alt="PayPal" className="h-8" />
-                    <img src="https://cdn.pixabay.com/photo/2021/12/08/05/16/visa-6854848_1280.png" alt="Visa" className="h-8" />
-                    <img src="https://cdn.pixabay.com/photo/2022/01/17/09/26/mastercard-6944458_1280.png" alt="Mastercard" className="h-8" />
-                    <img src="https://cdn.pixabay.com/photo/2015/12/10/20/18/credit-card-1086741_1280.png" alt="Amex" className="h-8" />
-                  </div>
-                </div>
               </div>
             </div>
             
-            {/* Order Summary - Right Column */}
-            <div className="lg:col-span-2">
-              <div className="bg-white p-6 rounded-lg shadow-md sticky top-24">
-                <h2 className="text-xl font-bold mb-4">Order Summary</h2>
+            {/* Right Column - Order Summary */}
+            <div className="w-full lg:w-1/2 order-1 lg:order-2">
+              <div className="bg-white rounded-lg shadow-sm p-6 mb-6">
+                <h2 className="text-xl font-semibold mb-4 pb-3 border-b border-gray-100">Order Summary</h2>
                 
                 {showCartItems ? (
                   <div>
                     <div className="max-h-60 overflow-y-auto mb-4">
                       {cartItems.map((item) => (
-                        <div key={item.id} className="flex items-start py-3 border-b border-gray-200 last:border-b-0">
-                          <div className="w-16 h-16 rounded-md overflow-hidden mr-3 flex-shrink-0">
+                        <div key={item.id} className="flex items-start py-3 border-b border-gray-100 last:border-b-0">
+                          <div className="w-16 h-16 rounded-md overflow-hidden mr-3 flex-shrink-0 bg-gray-50">
                             <img 
                               src={item.imageUrl} 
                               alt={item.title} 
@@ -524,7 +579,7 @@ const CheckoutPage: React.FC<CheckoutPageProps> = ({ productId }) => {
                   </div>
                 ) : (
                   <div className="flex items-center mb-6">
-                    <div className="w-24 h-24 rounded-md overflow-hidden mr-4">
+                    <div className="w-20 h-20 rounded-md overflow-hidden mr-4 bg-gray-50">
                       <img 
                         src={product.imageUrl} 
                         alt={product.name} 
@@ -532,48 +587,60 @@ const CheckoutPage: React.FC<CheckoutPageProps> = ({ productId }) => {
                       />
                     </div>
                     <div>
-                      <h3 className="font-bold text-lg">{product.name}</h3>
+                      <h3 className="font-bold text-gray-800">{product.name}</h3>
                       <p className="text-gray-600 text-sm">{product.description}</p>
                       <p className="text-[#fb6a69] font-bold mt-2">${(product.amount / 100).toFixed(2)}</p>
                     </div>
                   </div>
                 )}
                 
-                <div className="border-t border-gray-200 pt-4 mb-4">
-                  <div className="flex justify-between mb-2">
-                    <span>Subtotal</span>
-                    <span>
+                <div className="space-y-2 py-3 border-t border-gray-100">
+                  <div className="flex justify-between text-sm">
+                    <span className="text-gray-600">Subtotal</span>
+                    <span className="font-medium text-gray-800">
                       ${showCartItems 
                         ? getTotalPrice().toFixed(2) 
                         : (product.amount / 100).toFixed(2)}
                     </span>
                   </div>
-                  <div className="flex justify-between mb-2">
-                    <span>Tax</span>
-                    <span>$0.00</span>
+                  <div className="flex justify-between text-sm">
+                    <span className="text-gray-600">Tax</span>
+                    <span className="font-medium text-gray-800">$0.00</span>
                   </div>
-                  <div className="flex justify-between font-bold">
-                    <span>Total</span>
-                    <span className="text-[#fb6a69]">
+                  <div className="pt-2 mt-2 border-t border-gray-100 flex justify-between">
+                    <span className="font-semibold text-gray-800">Total</span>
+                    <span className="font-bold text-[#fb6a69]">
                       ${showCartItems 
                         ? getTotalPrice().toFixed(2) 
                         : (product.amount / 100).toFixed(2)}
                     </span>
                   </div>
                 </div>
+              </div>
+              
+              <div className="bg-white rounded-lg shadow-sm p-6">
+                <div className="flex items-center justify-center gap-2 mb-4">
+                  <ShieldCheck className="h-5 w-5 text-green-600" />
+                  <span className="text-base font-medium text-gray-800">Secure Checkout</span>
+                </div>
                 
-                {!paymentMethod && (
-                  <div className="mt-6 text-center">
-                    <p className="text-sm text-gray-600 mb-2">
-                      By completing your purchase you agree to our
-                    </p>
-                    <div className="flex justify-center space-x-2 text-sm text-[#2bcd82]">
-                      <a href="#" className="hover:underline">Terms of Service</a>
-                      <span>•</span>
-                      <a href="#" className="hover:underline">Privacy Policy</a>
-                    </div>
-                  </div>
-                )}
+                <div className="flex justify-center mb-4">
+                  <img 
+                    src="/images/payment-icons.png" 
+                    alt="PayPal Secured" 
+                    className="h-10" 
+                  />
+                </div>
+                
+                <div className="text-center text-xs text-gray-500 space-y-2">
+                  <p>Your information is protected by 256-bit SSL encryption</p>
+                  <p>
+                    By completing your purchase you agree to our{' '}
+                    <a href="#" className="text-[#2bcd82] hover:underline">Terms of Service</a>{' '}
+                    and{' '}
+                    <a href="#" className="text-[#2bcd82] hover:underline">Privacy Policy</a>
+                  </p>
+                </div>
               </div>
             </div>
           </div>

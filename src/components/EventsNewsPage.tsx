@@ -1,29 +1,26 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import Header from './Header';
 import Footer from './Footer';
-import { Calendar, Clock, MapPin, ExternalLink, Bell, ChevronRight, Search } from 'lucide-react';
+import { Calendar, Clock, MapPin, ExternalLink, Bell, ChevronRight, Search, ArrowLeft, Users, Phone, Mail, CreditCard, CheckCircle, X, ChevronDown, Share2 } from 'lucide-react';
+import { useEventsNews } from '../context/EventsNewsContext';
+import { formatDate } from '../utils/formatters';
+import { useLocation, useNavigate } from 'react-router-dom';
+import { Event as BaseEvent, News, fetchEventDetails } from '../lib/woocommerce/events-news';
 
-// Define types for events and news
-interface Event {
-  id: number;
-  title: string;
-  date: string;
-  time: string;
-  location: string;
-  description: string;
-  image: string;
-  registrationLink: string;
+// Extend the base Event type with additional fields for the detailed view
+interface EventWithDetails extends BaseEvent {
+  presenter?: string;
+  price?: number;
+  seats?: number;
+  seatsAvailable?: number;
+  cancellationPolicy?: string;
+  organizer?: string;
+  contactEmail?: string;
+  contactPhone?: string;
 }
 
-interface News {
-  id: number;
-  title: string;
-  date: string;
-  author: string;
-  summary: string;
-  image: string;
-  readMoreLink: string;
-}
+// Use the enhanced Event type for our component
+type Event = EventWithDetails;
 
 // Define a type for combined content items
 interface CombinedContentItem {
@@ -42,328 +39,606 @@ interface CombinedContentItem {
   readMoreLink?: string;
 }
 
-// Mock data for events
-const MOCK_EVENTS: Event[] = [
-  {
-    id: 1,
-    title: 'Annual Speech Pathology Conference',
-    date: '2024-06-15',
-    time: '9:00 AM - 5:00 PM',
-    location: 'Boston Convention Center',
-    description: 'Join us for the largest gathering of speech pathologists this year. Featuring keynote speakers, workshops, and networking opportunities.',
-    image: 'https://images.unsplash.com/photo-1540575467063-178a50c2df87?ixlib=rb-1.2.1&auto=format&fit=crop&w=800&q=80',
-    registrationLink: 'https://example.com/register'
-  },
-  {
-    id: 2,
-    title: 'Pediatric Speech Therapy Workshop',
-    date: '2024-07-22',
-    time: '10:00 AM - 3:00 PM',
-    location: 'Children\'s Hospital Auditorium',
-    description: 'A hands-on workshop focused on innovative techniques for pediatric speech therapy. Limited spots available.',
-    image: 'https://images.unsplash.com/photo-1516627145497-ae6968895b74?ixlib=rb-1.2.1&auto=format&fit=crop&w=800&q=80',
-    registrationLink: 'https://example.com/register'
-  },
-  {
-    id: 3,
-    title: 'Virtual SLP Networking Event',
-    date: '2024-08-05',
-    time: '6:00 PM - 8:00 PM',
-    location: 'Online (Zoom)',
-    description: 'Connect with fellow SLPs from around the country in this virtual networking event. Share experiences and build your professional network.',
-    image: 'https://images.unsplash.com/photo-1516733968668-dbdce39c4651?ixlib=rb-1.2.1&auto=format&fit=crop&w=800&q=80',
-    registrationLink: 'https://example.com/register'
-  },
-  {
-    id: 4,
-    title: 'Speech Technology Innovation Summit',
-    date: '2024-09-18',
-    time: '9:30 AM - 4:30 PM',
-    location: 'Tech Innovation Center',
-    description: 'Explore the latest technological advancements in speech therapy and rehabilitation. Demonstrations and panel discussions.',
-    image: 'https://images.unsplash.com/photo-1573164713988-8665fc963095?ixlib=rb-1.2.1&auto=format&fit=crop&w=800&q=80',
-    registrationLink: 'https://example.com/register'
-  }
-];
-
-// Mock data for news articles
-const MOCK_NEWS: News[] = [
-  {
-    id: 1,
-    title: 'New Research Shows Benefits of Early Intervention in Speech Therapy',
-    date: '2024-05-28',
-    author: 'Dr. Sarah Johnson',
-    summary: 'A groundbreaking study published in the Journal of Speech Pathology demonstrates significant improvements in outcomes when speech therapy begins before age 3.',
-    image: 'https://images.unsplash.com/photo-1551966775-a4ddc8df052b?ixlib=rb-1.2.1&auto=format&fit=crop&w=800&q=80',
-    readMoreLink: 'https://example.com/article'
-  },
-  {
-    id: 2,
-    title: 'FDA Approves New Speech Therapy Device for Stroke Patients',
-    date: '2024-05-15',
-    author: 'Michael Chen',
-    summary: 'The FDA has granted approval for a revolutionary new device designed to assist stroke patients in regaining speech capabilities through targeted neural stimulation.',
-    image: 'https://images.unsplash.com/photo-1576091160550-2173dba999ef?ixlib=rb-1.2.1&auto=format&fit=crop&w=800&q=80',
-    readMoreLink: 'https://example.com/article'
-  },
-  {
-    id: 3,
-    title: 'Speech Pathologists Report Increased Demand Following Pandemic',
-    date: '2024-05-02',
-    author: 'Lisa Rodriguez',
-    summary: 'A nationwide survey indicates a 35% increase in demand for speech pathology services, with experts attributing the rise to delayed treatments during the pandemic.',
-    image: 'https://images.unsplash.com/photo-1576091160399-112ba8d25d1d?ixlib=rb-1.2.1&auto=format&fit=crop&w=800&q=80',
-    readMoreLink: 'https://example.com/article'
-  },
-  {
-    id: 4,
-    title: 'New Guidelines Released for Teletherapy Best Practices',
-    date: '2024-04-20',
-    author: 'Dr. Robert Williams',
-    summary: 'The American Speech-Language-Hearing Association has published updated guidelines for conducting effective teletherapy sessions, emphasizing accessibility and engagement.',
-    image: 'https://images.unsplash.com/photo-1587614382346-4ec70e388b28?ixlib=rb-1.2.1&auto=format&fit=crop&w=800&q=80',
-    readMoreLink: 'https://example.com/article'
-  },
-  {
-    id: 5,
-    title: 'State Expands Insurance Coverage for Speech Therapy Services',
-    date: '2024-04-10',
-    author: 'Jennifer Taylor',
-    summary: 'New legislation requires insurance providers to cover a broader range of speech therapy services, including extended treatment periods for children with developmental disorders.',
-    image: 'https://images.unsplash.com/photo-1557804506-669a67965ba0?ixlib=rb-1.2.1&auto=format&fit=crop&w=800&q=80',
-    readMoreLink: 'https://example.com/article'
-  }
-];
-
-// Format date to readable format
-const formatDate = (dateString: string) => {
-  const options: Intl.DateTimeFormatOptions = { year: 'numeric', month: 'long', day: 'numeric' };
-  return new Date(dateString).toLocaleDateString('en-US', options);
-};
-
 const EventsNewsPage: React.FC = () => {
-  const [activeTab, setActiveTab] = useState<'all' | 'events' | 'news'>('all');
+  const location = useLocation();
+  const navigate = useNavigate();
+  const locationState = location.state as { activeTab?: 'all' | 'events' | 'news', selectedEventId?: number } | null;
+  
+  const [activeTab, setActiveTab] = useState<'all' | 'events' | 'news'>(
+    locationState?.activeTab || 'all'
+  );
   const [searchTerm, setSearchTerm] = useState('');
+  const [selectedEvent, setSelectedEvent] = useState<number | null>(
+    locationState?.selectedEventId || null
+  );
+  const [showEventDetails, setShowEventDetails] = useState<boolean>(!!locationState?.selectedEventId);
+  const [ticketQuantity, setTicketQuantity] = useState<number>(1);
+  const [eventDetail, setEventDetail] = useState<Event | null>(null);
+  const [loadingEventDetails, setLoadingEventDetails] = useState(false);
+  const [eventDetailsError, setEventDetailsError] = useState<string | null>(null);
+  
+  const { events, news, loading, error } = useEventsNews();
+  
+  // Find the currently selected event
+  const currentEvent = useMemo(() => {
+    if (!selectedEvent) return null;
+    return eventDetail || events.find(event => event.id === selectedEvent) as Event | null;
+  }, [selectedEvent, events, eventDetail]);
+  
+  // Scroll to selected event if passed in location state
+  useEffect(() => {
+    if (selectedEvent && !showEventDetails) {
+      const eventElement = document.getElementById(`event-${selectedEvent}`);
+      if (eventElement) {
+        eventElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        // Highlight the event card temporarily
+        eventElement.classList.add('ring-4', 'ring-[#2bcd82]', 'ring-opacity-70');
+        setTimeout(() => {
+          eventElement.classList.remove('ring-4', 'ring-[#2bcd82]', 'ring-opacity-70');
+        }, 2000);
+      }
+    }
+  }, [selectedEvent, loading, showEventDetails]);
+  
+  // Fetch event details when an event is selected
+  useEffect(() => {
+    if (selectedEvent && showEventDetails) {
+      const fetchDetails = async () => {
+        setLoadingEventDetails(true);
+        setEventDetailsError(null);
+        
+        try {
+          const details = await fetchEventDetails(selectedEvent);
+          if (details) {
+            setEventDetail(details);
+          }
+        } catch (error) {
+          console.error("Error fetching event details:", error);
+          setEventDetailsError("Failed to load event details. Please try again.");
+        } finally {
+          setLoadingEventDetails(false);
+        }
+      };
+      
+      fetchDetails();
+    } else {
+      // Reset event detail when no event is selected
+      setEventDetail(null);
+    }
+  }, [selectedEvent, showEventDetails]);
   
   // Filter content based on active tab and search term
-  const filteredEvents = MOCK_EVENTS.filter(event => 
-    event.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    event.description.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  const filteredEvents = useMemo(() => {
+    // First, deduplicate events that have the same core info but different attendee counts
+    const eventsMap = new Map();
+    
+    events.forEach(event => {
+      // Extract the base title (removing the attendee count part)
+      // For example: "Which Phonological Intervention Should I Choose? - Canberra 10+ Attendees"
+      // becomes: "Which Phonological Intervention Should I Choose? - Canberra"
+      const baseTitle = event.title.replace(/\s+\d+(?:-\d+)?\+?\s+Attendees$/, '');
+      
+      // If we haven't seen this base title before, or this event is on a different date
+      // than a previously seen event with the same base title, add it to our map
+      const key = `${baseTitle}-${event.date.split('T')[0]}`;
+      
+      if (!eventsMap.has(key) || new Date(event.date) > new Date(eventsMap.get(key).date)) {
+        // Store a clean version of the event with the attendee count removed from the title
+        const cleanEvent = {
+          ...event,
+          title: baseTitle
+        };
+        eventsMap.set(key, cleanEvent);
+      }
+    });
+    
+    // Convert the map values back to an array
+    const deduplicatedEvents = Array.from(eventsMap.values());
+    
+    // Then apply the search filter
+    return deduplicatedEvents.filter(event => 
+      event.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      event.description.toLowerCase().includes(searchTerm.toLowerCase())
+    );
+  }, [events, searchTerm]);
   
-  const filteredNews = MOCK_NEWS.filter(news => 
-    news.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    news.summary.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  const filteredNews = useMemo(() => {
+    return news.filter(news => 
+      news.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      news.summary.toLowerCase().includes(searchTerm.toLowerCase())
+    );
+  }, [news, searchTerm]);
   
   // Combined and sorted content for "All" tab
-  const combinedContent: CombinedContentItem[] = [...filteredEvents.map(event => ({
-    ...event,
-    type: 'event' as const,
-    sortDate: new Date(event.date)
-  })), ...filteredNews.map(news => ({
-    ...news,
-    type: 'news' as const,
-    sortDate: new Date(news.date)
-  }))].sort((a, b) => b.sortDate.getTime() - a.sortDate.getTime());
+  const combinedContent: CombinedContentItem[] = useMemo(() => {
+    return [...filteredEvents.map(event => ({
+      ...event,
+      type: 'event' as const,
+      sortDate: new Date(event.date)
+    })), ...filteredNews.map(news => ({
+      ...news,
+      type: 'news' as const,
+      sortDate: new Date(news.date)
+    }))].sort((a, b) => b.sortDate.getTime() - a.sortDate.getTime());
+  }, [filteredEvents, filteredNews]);
+
+  // Handle event selection
+  const handleEventSelect = (eventId: number) => {
+    setSelectedEvent(eventId);
+    setShowEventDetails(true);
+    // Update URL without reloading page
+    navigate('/events-news', { 
+      state: { 
+        activeTab: 'events',
+        selectedEventId: eventId 
+      }, 
+      replace: true 
+    });
+    window.scrollTo(0, 0);
+  };
+
+  // Back to events list
+  const handleBackToEvents = () => {
+    setShowEventDetails(false);
+    setSelectedEvent(null);
+    navigate('/events-news', { 
+      state: { activeTab: 'events' }, 
+      replace: true 
+    });
+  };
 
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col">
       <Header />
       
       <main className="flex-grow container mx-auto px-4 py-8">
-        {/* Page Header */}
-        <div className="text-center mb-10">
-          <h1 className="text-4xl font-bold text-gray-800 mb-4">Events & News</h1>
-          <p className="text-lg text-gray-600 max-w-3xl mx-auto">
-            Stay updated with the latest events, workshops, and news in the speech pathology community.
-          </p>
-        </div>
-        
-        {/* Search and Filter */}
-        <div className="mb-8 flex flex-col md:flex-row justify-between items-center gap-4">
-          <div className="flex space-x-2">
-            <button 
-              className={`px-4 py-2 rounded-full font-medium transition-colors ${
-                activeTab === 'all' 
-                  ? 'bg-[#2bcd82] text-white' 
-                  : 'bg-white text-gray-700 hover:bg-gray-100'
-              }`}
-              onClick={() => setActiveTab('all')}
-            >
-              All
-            </button>
-            <button 
-              className={`px-4 py-2 rounded-full font-medium transition-colors ${
-                activeTab === 'events' 
-                  ? 'bg-[#2bcd82] text-white' 
-                  : 'bg-white text-gray-700 hover:bg-gray-100'
-              }`}
-              onClick={() => setActiveTab('events')}
-            >
-              Events
-            </button>
-            <button 
-              className={`px-4 py-2 rounded-full font-medium transition-colors ${
-                activeTab === 'news' 
-                  ? 'bg-[#2bcd82] text-white' 
-                  : 'bg-white text-gray-700 hover:bg-gray-100'
-              }`}
-              onClick={() => setActiveTab('news')}
-            >
-              News
-            </button>
-          </div>
-          
-          <div className="relative w-full md:w-64">
-            <input
-              type="text"
-              placeholder="Search..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-full focus:outline-none focus:ring-2 focus:ring-[#2bcd82] focus:border-transparent"
-            />
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
-          </div>
-        </div>
-        
-        {/* Content Grid */}
-        <div className="grid grid-cols-1 gap-6">
-          {/* Show content based on active tab */}
-          {activeTab === 'all' && combinedContent.map((item) => (
-            item.type === 'event' ? (
-              <EventCard key={`event-${item.id}`} event={item as Event} showCategory={true} />
+        {/* Event Details View */}
+        {showEventDetails && currentEvent ? (
+          <div>
+            {/* Back Button - positioned above the content */}
+            <div className="mb-4">
+              <button 
+                onClick={handleBackToEvents}
+                className="flex items-center text-gray-600 hover:text-[#2bcd82] transition-colors font-medium"
+              >
+                <ArrowLeft className="w-5 h-5 mr-2" />
+                Back to Events
+              </button>
+            </div>
+            
+            {loadingEventDetails ? (
+              <div className="bg-white rounded-lg shadow-md p-8 text-center">
+                <div className="animate-spin w-12 h-12 border-4 border-[#2bcd82] border-t-transparent rounded-full mx-auto mb-4"></div>
+                <p className="text-gray-600">Loading event details...</p>
+              </div>
+            ) : eventDetailsError ? (
+              <div className="bg-white rounded-lg shadow-md p-8">
+                <div className="text-red-500 mb-4 text-center">{eventDetailsError}</div>
+                <button 
+                  onClick={() => handleEventSelect(selectedEvent!)}
+                  className="mx-auto block bg-[#2bcd82] hover:bg-[#25b975] text-white font-medium py-2 px-4 rounded"
+                >
+                  Try Again
+                </button>
+              </div>
             ) : (
-              <NewsCard key={`news-${item.id}`} news={item as News} showCategory={true} />
-            )
-          ))}
-          
-          {activeTab === 'events' && filteredEvents.map(event => (
-            <EventCard key={event.id} event={event} />
-          ))}
-          
-          {activeTab === 'news' && filteredNews.map(news => (
-            <NewsCard key={news.id} news={news} />
-          ))}
-          
-          {/* No results message */}
-          {((activeTab === 'all' && combinedContent.length === 0) ||
-            (activeTab === 'events' && filteredEvents.length === 0) ||
-            (activeTab === 'news' && filteredNews.length === 0)) && (
-            <div className="col-span-full text-center py-12">
-              <Bell className="w-12 h-12 mx-auto text-gray-300 mb-4" />
-              <h3 className="text-xl font-medium text-gray-700 mb-2">No results found</h3>
-              <p className="text-gray-500">
-                Try adjusting your search or filter to find what you're looking for.
+              <div className="bg-white rounded-lg shadow-md overflow-hidden mb-8">
+                {/* Event Content - Vertical layout with 1/2 text and 1/2 image */}
+                <div className="grid grid-cols-1 md:grid-cols-2">
+                  {/* Left Column - Event Image */}
+                  <div className="relative h-[400px] md:h-full">
+                    <img 
+                      src={currentEvent.image || "https://images.unsplash.com/photo-1503676260728-1c00da094a0b?ixlib=rb-1.2.1&auto=format&fit=crop&w=1500&q=80"} 
+                      alt={currentEvent.title} 
+                      className="w-full h-full object-cover"
+                    />
+                    <div className="absolute top-4 left-4">
+                      <span className="px-3 py-1 rounded-full text-xs font-medium bg-[#2bcd82] text-white inline-block">
+                        Event
+                      </span>
+                    </div>
+                  </div>
+                  
+                  {/* Right Column - Event Details */}
+                  <div className="p-6">
+                    <h1 className="text-3xl font-bold text-gray-800 mb-4">{currentEvent.title}</h1>
+                    
+                    {/* Event Info Bar */}
+                    <div className="flex flex-wrap gap-y-4 mb-6 border-y border-gray-100 py-4">
+                      <div className="w-full md:w-1/2 flex items-center text-gray-700">
+                        <Calendar className="w-5 h-5 mr-2 text-[#2bcd82]" />
+                        <span>{formatDate(currentEvent.date, 'long')}</span>
+                      </div>
+                      <div className="w-full md:w-1/2 flex items-center text-gray-700">
+                        <Clock className="w-5 h-5 mr-2 text-[#2bcd82]" />
+                        <span>{currentEvent.time}</span>
+                      </div>
+                      <div className="w-full md:w-1/2 flex items-center text-gray-700">
+                        <MapPin className="w-5 h-5 mr-2 text-[#2bcd82]" />
+                        <span>{currentEvent.location}</span>
+                      </div>
+                      <div className="w-full md:w-1/2 flex items-center text-gray-700">
+                        <Users className="w-5 h-5 mr-2 text-[#2bcd82]" />
+                        <span>{currentEvent.seatsAvailable ?? 20} seats available</span>
+                      </div>
+                    </div>
+                    
+                    {/* Price and Registration */}
+                    <div className="bg-gray-50 p-4 rounded-lg mb-6">
+                      <div className="flex justify-between items-center mb-4">
+                        <span className="text-lg font-semibold text-gray-800">Registration Fee</span>
+                        <span className="text-2xl font-bold text-[#2bcd82]">${currentEvent.price ?? 99}</span>
+                      </div>
+                      <a
+                        href={currentEvent.registrationLink ?? "#"}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="block w-full bg-[#2bcd82] hover:bg-[#25b975] text-white font-medium py-3 px-4 rounded text-center transition-colors"
+                      >
+                        Register Now
+                      </a>
+                      <div className="mt-2 text-center text-gray-500 text-sm">
+                        Secure checkout with PayPal or credit card
+                      </div>
+                    </div>
+                    
+                    {/* About This Event */}
+                    <div className="mb-6">
+                      <h2 className="text-xl font-bold text-gray-800 mb-3">About this Event</h2>
+                      <div className="prose max-w-none text-gray-700">
+                        <p className="mb-4">{currentEvent.description}</p>
+                      </div>
+                    </div>
+                    
+                    {/* Presenter Information */}
+                    <div className="mb-6">
+                      <h3 className="font-semibold text-gray-800 mb-2">Presenter</h3>
+                      <p className="text-gray-700">{currentEvent.presenter ?? "Dr. Sarah Johnson"}</p>
+                    </div>
+                    
+                    {/* Contact Information */}
+                    <div className="mb-6">
+                      <h3 className="font-semibold text-gray-800 mb-2">Contact</h3>
+                      <div className="flex items-center mb-1">
+                        <Mail className="w-4 h-4 mr-2 text-gray-500" />
+                        <span className="text-gray-700">{currentEvent.contactEmail ?? "events@speechpathology.com"}</span>
+                      </div>
+                      <div className="flex items-center">
+                        <Phone className="w-4 h-4 mr-2 text-gray-500" />
+                        <span className="text-gray-700">{currentEvent.contactPhone ?? "(555) 123-4567"}</span>
+                      </div>
+                    </div>
+                    
+                    {/* Cancellation Policy */}
+                    <div>
+                      <h3 className="font-semibold text-gray-800 mb-2">Cancellation Policy</h3>
+                      <p className="text-gray-700">{currentEvent.cancellationPolicy ?? "Full refund up to 7 days before the event. No refunds within 7 days of the event."}</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        ) : (
+          <>
+            {/* Page Header */}
+            <div className="text-center mb-10">
+              <h1 className="text-4xl font-bold text-gray-800 mb-4">Events & News</h1>
+              <p className="text-lg text-gray-600 max-w-3xl mx-auto">
+                Stay updated with the latest events, workshops, and news in the speech pathology community.
               </p>
             </div>
-          )}
-        </div>
+            
+            {/* Search and Filter */}
+            <div className="mb-8 flex flex-col md:flex-row justify-between items-center gap-4">
+              <div className="flex space-x-2">
+                <button 
+                  className={`px-4 py-2 rounded-full font-medium transition-colors ${
+                    activeTab === 'all' 
+                      ? 'bg-[#2bcd82] text-white' 
+                      : 'bg-white text-gray-700 hover:bg-gray-100'
+                  }`}
+                  onClick={() => setActiveTab('all')}
+                >
+                  All
+                </button>
+                <button 
+                  className={`px-4 py-2 rounded-full font-medium transition-colors ${
+                    activeTab === 'events' 
+                      ? 'bg-[#2bcd82] text-white' 
+                      : 'bg-white text-gray-700 hover:bg-gray-100'
+                  }`}
+                  onClick={() => setActiveTab('events')}
+                >
+                  Events
+                </button>
+                <button 
+                  className={`px-4 py-2 rounded-full font-medium transition-colors ${
+                    activeTab === 'news' 
+                      ? 'bg-[#2bcd82] text-white' 
+                      : 'bg-white text-gray-700 hover:bg-gray-100'
+                  }`}
+                  onClick={() => setActiveTab('news')}
+                >
+                  News
+                </button>
+              </div>
+              
+              <div className="relative w-full md:w-72">
+                <input 
+                  type="text" 
+                  className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-full focus:outline-none focus:ring-2 focus:ring-[#2bcd82] focus:border-transparent"
+                  placeholder="Search events & news..." 
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                />
+                <Search className="absolute left-3 top-2.5 w-5 h-5 text-gray-400" />
+              </div>
+            </div>
+            
+            {/* Loading State */}
+            {loading && (
+              <div className="flex justify-center items-center py-16">
+                <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-[#2bcd82]"></div>
+              </div>
+            )}
+            
+            {/* Error State */}
+            {error && (
+              <div className="bg-red-50 border-l-4 border-red-500 p-4 my-8">
+                <div className="flex">
+                  <div className="flex-shrink-0">
+                    <svg className="h-5 w-5 text-red-500" viewBox="0 0 20 20" fill="currentColor">
+                      <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+                    </svg>
+                  </div>
+                  <div className="ml-3">
+                    <p className="text-sm text-red-700">
+                      {error}
+                    </p>
+                  </div>
+                </div>
+              </div>
+            )}
+            
+            {/* Content */}
+            {!loading && !error && (
+              <div className="grid grid-cols-1 gap-8">
+                {/* All Content */}
+                {activeTab === 'all' && combinedContent.length > 0 && (
+                  <>
+                    {combinedContent.map(item => (
+                      <div 
+                        key={`${item.type}-${item.id}`}
+                        id={item.type === 'event' ? `event-${item.id}` : `news-${item.id}`}
+                        className="bg-white rounded-lg shadow-md overflow-hidden border border-gray-100"
+                        onClick={item.type === 'event' ? () => handleEventSelect(item.id) : undefined}
+                        style={{ cursor: item.type === 'event' ? 'pointer' : 'default' }}
+                      >
+                        <div className="md:flex h-full">
+                          <div className="md:w-1/4 h-36 md:h-auto max-w-[220px]">
+                            <img 
+                              src={item.image} 
+                              alt={item.title} 
+                              className="w-full h-full object-cover"
+                            />
+                          </div>
+                          <div className="p-6 md:w-3/4 flex flex-col h-full relative">
+                            <div className="flex justify-between items-start mb-2">
+                              <span className={`px-3 py-1 rounded-full text-xs font-medium ${
+                                item.type === 'event' 
+                                  ? 'bg-[#2bcd82]/10 text-[#2bcd82]' 
+                                  : 'bg-[#fb6a69]/10 text-[#fb6a69]'
+                              }`}>
+                                {item.type === 'event' ? 'Event' : 'News'}
+                              </span>
+                              <span className="text-gray-500 text-sm">{formatDate(item.date, 'medium')}</span>
+                            </div>
+                            <h2 className="text-2xl font-bold text-gray-800 mb-2">{item.title}</h2>
+                            {item.type === 'event' ? (
+                              <>
+                                <div className="flex items-center text-gray-600 mb-1">
+                                  <Clock className="w-4 h-4 mr-2" />
+                                  <span>{item.time}</span>
+                                </div>
+                                <div className="flex items-center text-gray-600 mb-4">
+                                  <MapPin className="w-4 h-4 mr-2" />
+                                  <span>{item.location}</span>
+                                </div>
+                                <p className="text-gray-600 mb-4 line-clamp-2">{item.description}</p>
+                                <div className="mt-auto flex justify-end">
+                                  <button 
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      handleEventSelect(item.id);
+                                    }}
+                                    className="inline-flex items-center bg-[#2bcd82] text-white hover:bg-[#25b975] font-medium py-2 px-4 rounded"
+                                  >
+                                    View Details
+                                  </button>
+                                </div>
+                              </>
+                            ) : (
+                              <>
+                                <div className="flex items-center text-gray-600 mb-4">
+                                  <span className="font-medium">By: {item.author}</span>
+                                </div>
+                                <p className="text-gray-600 mb-4 line-clamp-2">{item.summary}</p>
+                                <div className="mt-auto flex justify-end">
+                                  <a 
+                                    href={item.readMoreLink} 
+                                    target="_blank" 
+                                    rel="noopener noreferrer"
+                                    className="inline-flex items-center bg-[#fb6a69] text-white hover:bg-[#f5514f] font-medium py-2 px-4 rounded"
+                                  >
+                                    Read Full Article <ExternalLink className="w-4 h-4 ml-1" />
+                                  </a>
+                                </div>
+                              </>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                    
+                    {combinedContent.length === 0 && (
+                      <div className="text-center py-16">
+                        <p className="text-gray-500 text-lg">No results found matching "{searchTerm}"</p>
+                      </div>
+                    )}
+                  </>
+                )}
+                
+                {/* Events Only */}
+                {activeTab === 'events' && (
+                  <>
+                    {filteredEvents.length > 0 ? (
+                      <div className="grid grid-cols-1 gap-8">
+                        {filteredEvents.map(event => (
+                          <div 
+                            key={event.id} 
+                            id={`event-${event.id}`}
+                            className="bg-white rounded-lg shadow-md overflow-hidden border border-gray-100 cursor-pointer"
+                            onClick={() => handleEventSelect(event.id)}
+                          >
+                            <div className="md:flex h-full">
+                              <div className="md:w-1/4 h-36 md:h-auto max-w-[220px]">
+                                <img 
+                                  src={event.image} 
+                                  alt={event.title} 
+                                  className="w-full h-full object-cover"
+                                />
+                              </div>
+                              <div className="p-6 md:w-3/4 flex flex-col h-full relative">
+                                <div className="flex justify-between items-start mb-2">
+                                  <span className="px-3 py-1 rounded-full text-xs font-medium bg-[#2bcd82]/10 text-[#2bcd82]">
+                                    Event
+                                  </span>
+                                  <span className="text-gray-500 text-sm">{formatDate(event.date, 'medium')}</span>
+                                </div>
+                                <h2 className="text-2xl font-bold text-gray-800 mb-2">{event.title}</h2>
+                                <div className="flex items-center text-gray-600 mb-1">
+                                  <Clock className="w-4 h-4 mr-2" />
+                                  <span>{event.time}</span>
+                                </div>
+                                <div className="flex items-center text-gray-600 mb-4">
+                                  <MapPin className="w-4 h-4 mr-2" />
+                                  <span>{event.location}</span>
+                                </div>
+                                <p className="text-gray-600 mb-4 line-clamp-2">{event.description}</p>
+                                <div className="mt-auto flex justify-end">
+                                  <button 
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      handleEventSelect(event.id);
+                                    }}
+                                    className="inline-flex items-center bg-[#2bcd82] text-white hover:bg-[#25b975] font-medium py-2 px-4 rounded"
+                                  >
+                                    View Details
+                                  </button>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="text-center py-16">
+                        {searchTerm ? (
+                          <p className="text-gray-500 text-lg">No events found matching "{searchTerm}"</p>
+                        ) : (
+                          <p className="text-gray-500 text-lg">No events currently scheduled</p>
+                        )}
+                      </div>
+                    )}
+                  </>
+                )}
+                
+                {/* News Only */}
+                {activeTab === 'news' && (
+                  <>
+                    {filteredNews.length > 0 ? (
+                      <div className="grid grid-cols-1 gap-8">
+                        {filteredNews.map(newsItem => (
+                          <div 
+                            key={newsItem.id}
+                            id={`news-${newsItem.id}`}
+                            className="bg-white rounded-lg shadow-md overflow-hidden border border-gray-100"
+                          >
+                            <div className="md:flex h-full">
+                              <div className="md:w-1/4 h-36 md:h-auto max-w-[220px]">
+                                <img 
+                                  src={newsItem.image} 
+                                  alt={newsItem.title} 
+                                  className="w-full h-full object-cover"
+                                />
+                              </div>
+                              <div className="p-6 md:w-3/4 flex flex-col h-full relative">
+                                <div className="flex justify-between items-start mb-2">
+                                  <span className="px-3 py-1 rounded-full text-xs font-medium bg-[#fb6a69]/10 text-[#fb6a69]">
+                                    News
+                                  </span>
+                                  <span className="text-gray-500 text-sm">{formatDate(newsItem.date, 'medium')}</span>
+                                </div>
+                                <h2 className="text-2xl font-bold text-gray-800 mb-2">{newsItem.title}</h2>
+                                <div className="flex items-center text-gray-600 mb-4">
+                                  <span className="font-medium">By: {newsItem.author}</span>
+                                </div>
+                                <p className="text-gray-600 mb-4 line-clamp-2">{newsItem.summary}</p>
+                                <div className="mt-auto flex justify-end">
+                                  <a 
+                                    href={newsItem.readMoreLink} 
+                                    target="_blank" 
+                                    rel="noopener noreferrer"
+                                    className="inline-flex items-center bg-[#fb6a69] text-white hover:bg-[#f5514f] font-medium py-2 px-4 rounded"
+                                  >
+                                    Read Full Article <ExternalLink className="w-4 h-4 ml-1" />
+                                  </a>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="text-center py-16">
+                        {searchTerm ? (
+                          <p className="text-gray-500 text-lg">No news found matching "{searchTerm}"</p>
+                        ) : (
+                          <p className="text-gray-500 text-lg">No news articles available</p>
+                        )}
+                      </div>
+                    )}
+                  </>
+                )}
+                
+                {/* Subscribe Section */}
+                <div className="bg-gradient-to-r from-[#2bcd82]/10 to-[#fb6a69]/10 p-8 rounded-lg mt-12">
+                  <div className="max-w-3xl mx-auto text-center">
+                    <Bell className="w-12 h-12 text-[#2bcd82] mx-auto mb-4" />
+                    <h2 className="text-2xl font-bold text-gray-800 mb-2">Stay Updated</h2>
+                    <p className="text-gray-600 mb-6">
+                      Subscribe to our newsletter to receive updates about upcoming events and latest news in speech pathology.
+                    </p>
+                    <div className="flex flex-col sm:flex-row gap-2 max-w-md mx-auto">
+                      <input
+                        type="email"
+                        placeholder="Your email address"
+                        className="flex-grow px-4 py-2 rounded-full border border-gray-300 focus:outline-none focus:ring-2 focus:ring-[#2bcd82] focus:border-transparent"
+                      />
+                      <button className="bg-[#2bcd82] hover:bg-[#25b975] text-white font-medium px-6 py-2 rounded-full transition-colors">
+                        Subscribe
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+          </>
+        )}
       </main>
-      
+
       <Footer />
-    </div>
-  );
-};
-
-// Event Card Component
-interface EventProps {
-  event: Event;
-  showCategory?: boolean;
-}
-
-const EventCard: React.FC<EventProps> = ({ event, showCategory = false }) => {
-  return (
-    <div className="bg-white rounded-lg overflow-hidden shadow-md hover:shadow-lg transition-shadow flex flex-col md:flex-row">
-      {/* Image on the left */}
-      <div className="md:w-1/3 h-48 md:h-auto overflow-hidden relative">
-        <img 
-          src={event.image} 
-          alt={event.title} 
-          className="w-full h-full object-cover transition-transform hover:scale-105 duration-300"
-        />
-        {showCategory && (
-          <div className="absolute top-3 left-3 bg-[#fb6a69] text-white text-xs font-bold px-2 py-1 rounded">
-            EVENT
-          </div>
-        )}
-      </div>
-      
-      {/* Content on the right */}
-      <div className="md:w-2/3 p-5 flex flex-col justify-between">
-        <div>
-          <div className="flex items-center text-[#fb6a69] text-sm mb-2">
-            <Calendar className="w-4 h-4 mr-1" />
-            <span>{formatDate(event.date)}</span>
-          </div>
-          <h3 className="text-xl font-bold text-gray-800 mb-2">{event.title}</h3>
-          <div className="flex items-center text-gray-600 text-sm mb-2">
-            <Clock className="w-4 h-4 mr-1" />
-            <span>{event.time}</span>
-          </div>
-          <div className="flex items-center text-gray-600 text-sm mb-3">
-            <MapPin className="w-4 h-4 mr-1" />
-            <span>{event.location}</span>
-          </div>
-          <p className="text-gray-600 mb-4 line-clamp-2">{event.description}</p>
-        </div>
-        
-        <a 
-          href={event.registrationLink}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="inline-flex items-center text-[#2bcd82] hover:text-[#25b975] font-medium transition-colors"
-        >
-          Register Now <ChevronRight className="w-4 h-4 ml-1" />
-        </a>
-      </div>
-    </div>
-  );
-};
-
-// News Card Component
-interface NewsProps {
-  news: News;
-  showCategory?: boolean;
-}
-
-const NewsCard: React.FC<NewsProps> = ({ news, showCategory = false }) => {
-  return (
-    <div className="bg-white rounded-lg overflow-hidden shadow-md hover:shadow-lg transition-shadow flex flex-col md:flex-row">
-      {/* Image on the left */}
-      <div className="md:w-1/3 h-48 md:h-auto overflow-hidden relative">
-        <img 
-          src={news.image} 
-          alt={news.title} 
-          className="w-full h-full object-cover transition-transform hover:scale-105 duration-300"
-        />
-        {showCategory && (
-          <div className="absolute top-3 left-3 bg-[#2bcd82] text-white text-xs font-bold px-2 py-1 rounded">
-            NEWS
-          </div>
-        )}
-      </div>
-      
-      {/* Content on the right */}
-      <div className="md:w-2/3 p-5 flex flex-col justify-between">
-        <div>
-          <div className="flex items-center justify-between text-sm mb-2">
-            <span className="text-[#fb6a69]">{formatDate(news.date)}</span>
-            <span className="text-gray-600">By {news.author}</span>
-          </div>
-          <h3 className="text-xl font-bold text-gray-800 mb-3">{news.title}</h3>
-          <p className="text-gray-600 mb-4 line-clamp-3">{news.summary}</p>
-        </div>
-        
-        <a 
-          href={news.readMoreLink}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="inline-flex items-center text-[#2bcd82] hover:text-[#25b975] font-medium transition-colors"
-        >
-          Read More <ExternalLink className="w-4 h-4 ml-1" />
-        </a>
-      </div>
     </div>
   );
 };

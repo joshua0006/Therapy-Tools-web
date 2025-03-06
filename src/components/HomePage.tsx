@@ -3,39 +3,50 @@ import { useNavigate } from 'react-router-dom';
 import Header from './Header';
 import Footer from './Footer';
 import Button from './Button';
-import { BookOpen, Users, GraduationCap, Award, Download, ShoppingBag, ChevronLeft, ChevronRight} from 'lucide-react';
+import { BookOpen, Users, GraduationCap, Award, Download, ShoppingBag, ChevronLeft, ChevronRight, Clock, MapPin, ExternalLink } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
-
-
+import { useWooCommerce } from '../context/WooCommerceContext';
+import { useEventsNews } from '../context/EventsNewsContext';
+import { formatCurrency, formatDate } from '../utils/formatters';
 
 const HomePage: React.FC = () => {
   const { isLoggedIn } = useAuth();
   const navigate = useNavigate();
+  const { featuredProducts, loading: productsLoading } = useWooCommerce();
+  const { 
+    events,
+    featuredEvent, 
+    featuredNews, 
+    loading: eventsNewsLoading 
+  } = useEventsNews();
   
   // Carousel state
   const [currentSlide, setCurrentSlide] = useState(0);
-  const carouselImages = [
-    "https://images.unsplash.com/photo-1516733968668-dbdce39c4651?ixlib=rb-1.2.1&auto=format&fit=crop&w=800&q=80",
-    "https://images.unsplash.com/photo-1576267423445-b2e0074d68a4?ixlib=rb-1.2.1&auto=format&fit=crop&w=800&q=80",
-    "https://images.unsplash.com/photo-1607453998774-d533f65dac99?ixlib=rb-1.2.1&auto=format&fit=crop&w=800&q=80",
-    "https://images.unsplash.com/photo-1576267423445-b2e0074d68a4?ixlib=rb-1.2.1&auto=format&fit=crop&w=800&q=80"
-  ];
+  
+  // Use events for the carousel instead of products
+  const carouselEvents = events.slice(0, 4);
 
   // Auto-rotate carousel
   useEffect(() => {
     const interval = setInterval(() => {
-      setCurrentSlide((prev) => (prev + 1) % carouselImages.length);
+      if (carouselEvents.length > 0) {
+        setCurrentSlide((prev) => (prev + 1) % carouselEvents.length);
+      }
     }, 5000);
     return () => clearInterval(interval);
-  }, [carouselImages.length]);
+  }, [carouselEvents.length]);
 
   // Manual navigation
   const prevSlide = () => {
-    setCurrentSlide((prev) => (prev === 0 ? carouselImages.length - 1 : prev - 1));
+    if (carouselEvents.length > 0) {
+      setCurrentSlide((prev) => (prev === 0 ? carouselEvents.length - 1 : prev - 1));
+    }
   };
 
   const nextSlide = () => {
-    setCurrentSlide((prev) => (prev + 1) % carouselImages.length);
+    if (carouselEvents.length > 0) {
+      setCurrentSlide((prev) => (prev + 1) % carouselEvents.length);
+    }
   };
 
   return (
@@ -83,23 +94,50 @@ const HomePage: React.FC = () => {
               </div>
             </div>
             <div className="md:w-1/2 flex justify-center">
-              {/* Photo Carousel - Larger size */}
+              {/* Events Carousel */}
               <div className="relative w-full">
                 <div className="rounded-lg overflow-hidden shadow-xl h-[28rem] w-full relative">
-                  {carouselImages.map((image, index) => (
-                    <div 
-                      key={index}
-                      className={`absolute inset-0 transition-opacity duration-1000 ${
-                        index === currentSlide ? 'opacity-100' : 'opacity-0'
-                      }`}
-                    >
-                      <img 
-                        src={image} 
-                        alt={`Speech therapy slide ${index + 1}`} 
-                        className="w-full h-full object-cover"
-                      />
+                  {eventsNewsLoading ? (
+                    <div className="flex justify-center items-center h-full bg-gray-100">
+                      <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#2bcd82]"></div>
                     </div>
-                  ))}
+                  ) : (
+                    carouselEvents.map((event, index) => (
+                      <div 
+                        key={event.id}
+                        className={`absolute inset-0 transition-opacity duration-1000 ${
+                          index === currentSlide ? 'opacity-100' : 'opacity-0'
+                        }`}
+                      >
+                        <img 
+                          src={event.image || "https://images.unsplash.com/photo-1503676260728-1c00da094a0b?ixlib=rb-1.2.1&auto=format&fit=crop&w=800&q=80"} 
+                          alt={event.title} 
+                          className="w-full h-full object-cover"
+                        />
+                        {/* Event Info Overlay */}
+                        <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/70 to-transparent p-6 text-white">
+                          <span className="px-3 py-1 rounded-full text-xs font-medium bg-[#2bcd82]/20 text-white mb-2 inline-block">
+                            Event
+                          </span>
+                          <h3 className="text-2xl font-bold mb-4">{event.title}</h3>
+                          <button 
+                            className="bg-[#2bcd82] hover:bg-[#25b975] text-white font-medium py-2 px-4 rounded"
+                            onClick={(e) => {
+                              e.stopPropagation(); // Prevent triggering the parent div's onClick
+                              navigate('/events-news', { 
+                                state: { 
+                                  activeTab: 'events',
+                                  selectedEventId: event.id 
+                                } 
+                              });
+                            }}
+                          >
+                            Learn More
+                          </button>
+                        </div>
+                      </div>
+                    ))
+                  )}
                   
                   {/* Carousel Controls */}
                   <div className="absolute inset-0 flex items-center justify-between p-4">
@@ -120,8 +158,8 @@ const HomePage: React.FC = () => {
                   </div>
                   
                   {/* Carousel Indicators */}
-                  <div className="absolute bottom-4 left-0 right-0 flex justify-center space-x-3">
-                    {carouselImages.map((_, index) => (
+                  <div className="absolute bottom-24 left-0 right-0 flex justify-center space-x-3">
+                    {carouselEvents.map((_, index) => (
                       <button
                         key={index}
                         onClick={() => setCurrentSlide(index)}
@@ -161,7 +199,6 @@ const HomePage: React.FC = () => {
           </div>
         </div>
       </div>
-
 
       {/* Member Benefits */}
       <div className="py-16 bg-gray-100">
@@ -208,51 +245,44 @@ const HomePage: React.FC = () => {
             Featured <span className="text-[#fb6a69]">Catalogs</span>
           </h2>
           
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-            {[
-              {
-                title: "Articulation Worksheets Bundle",
-                image: "https://images.unsplash.com/photo-1503676260728-1c00da094a0b?ixlib=rb-1.2.1&auto=format&fit=crop&w=800&q=80",
-                price: "$19.99",
-                url: "/resource/1"
-              },
-              {
-                title: "Language Development Assessment",
-                image: "https://images.unsplash.com/photo-1434030216411-0b793f4b4173?ixlib=rb-1.2.1&auto=format&fit=crop&w=800&q=80",
-                price: "$24.99",
-                url: "/resource/2"
-              },
-              {
-                title: "Speech Therapy Games Collection",
-                image: "https://images.unsplash.com/photo-1559131583-f176a2eb61db?ixlib=rb-1.2.1&auto=format&fit=crop&w=800&q=80",
-                price: "$29.99",
-                url: "/resource/3"
-              }
-            ].map((product, index) => (
-              <div 
-                key={index} 
-                className="bg-white rounded-lg overflow-hidden shadow-md hover:shadow-lg transition-all hover:-translate-y-1 cursor-pointer"
-                onClick={() => navigate(product.url)}
-              >
-                <div className="h-48 overflow-hidden">
-                  <img 
-                    src={product.image} 
-                    alt={product.title} 
-                    className="w-full h-full object-cover transition-transform hover:scale-105"
-                  />
-                </div>
-                <div className="p-4">
-                  <h3 className="text-lg font-bold text-gray-800 mb-2">{product.title}</h3>
-                  <div className="flex justify-between items-center">
-                    <span className="text-lg font-bold text-[#fb6a69]">{product.price}</span>
-                    <button className="bg-[#2bcd82] hover:bg-[#25b975] text-white font-medium py-1 px-4 rounded-full">
-                      View Details
-                    </button>
+          {productsLoading ? (
+            <div className="flex justify-center items-center py-12">
+              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#2bcd82]"></div>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+              {featuredProducts.map((product, index) => (
+                <div 
+                  key={product.id} 
+                  className="bg-white rounded-lg overflow-hidden shadow-md hover:shadow-lg transition-all hover:-translate-y-1 cursor-pointer"
+                  onClick={() => navigate(`/resource/${product.id}`)}
+                >
+                  <div className="h-48 overflow-hidden">
+                    <img 
+                      src={product.thumbnail || "https://images.unsplash.com/photo-1503676260728-1c00da094a0b?ixlib=rb-1.2.1&auto=format&fit=crop&w=800&q=80"} 
+                      alt={product.name} 
+                      className="w-full h-full object-cover transition-transform hover:scale-105"
+                    />
+                  </div>
+                  <div className="p-4">
+                    <h3 className="text-lg font-bold text-gray-800 mb-2">{product.name}</h3>
+                    <div className="flex justify-between items-center">
+                      <span className="text-lg font-bold text-[#fb6a69]">{formatCurrency(product.price)}</span>
+                      <button 
+                        className="bg-[#2bcd82] hover:bg-[#25b975] text-white font-medium py-1 px-4 rounded-full"
+                        onClick={(e) => {
+                          e.stopPropagation(); // Prevent triggering the parent card's onClick
+                          navigate(`/resource/${product.id}`);
+                        }}
+                      >
+                        View Details
+                      </button>
+                    </div>
                   </div>
                 </div>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          )}
           
           <div className="text-center mt-10">
             <Button 
@@ -276,55 +306,94 @@ const HomePage: React.FC = () => {
             </p>
           </div>
           
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-            {/* Events Preview */}
-            <div className="bg-white rounded-lg shadow-md overflow-hidden">
-              <div className="h-64 overflow-hidden">
-                <img 
-                  src="https://images.unsplash.com/photo-1540575467063-178a50c2df87?ixlib=rb-1.2.1&auto=format&fit=crop&w=800&q=80" 
-                  alt="Speech pathology event" 
-                  className="w-full h-full object-cover"
-                />
-              </div>
-              <div className="p-6">
-                <h3 className="text-2xl font-bold text-gray-800 mb-3">Upcoming Events</h3>
-                <p className="text-gray-600 mb-4">
-                  Discover conferences, workshops, and networking opportunities for speech-language pathologists.
-                </p>
-                <Button 
-                  variant="secondary" 
-                  size="medium"
-                  onClick={() => navigate('/events-news')}
-                >
-                  View Events
-                </Button>
-              </div>
+          {eventsNewsLoading ? (
+            <div className="flex justify-center items-center py-12">
+              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#2bcd82]"></div>
             </div>
-            
-            {/* News Preview */}
-            <div className="bg-white rounded-lg shadow-md overflow-hidden">
-              <div className="h-64 overflow-hidden">
-                <img 
-                  src="https://images.unsplash.com/photo-1551966775-a4ddc8df052b?ixlib=rb-1.2.1&auto=format&fit=crop&w=800&q=80" 
-                  alt="Speech pathology news" 
-                  className="w-full h-full object-cover"
-                />
-              </div>
-              <div className="p-6">
-                <h3 className="text-2xl font-bold text-gray-800 mb-3">Latest News</h3>
-                <p className="text-gray-600 mb-4">
-                  Stay informed about the latest research, trends, and developments in speech pathology.
-                </p>
-                <Button 
-                  variant="secondary" 
-                  size="medium"
-                  onClick={() => navigate('/events-news')}
-                >
-                  Read News
-                </Button>
-              </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+              {/* Events Card - Updated to match EventsNewsPage design */}
+              {featuredEvent && (
+                <div className="bg-white rounded-lg shadow-md overflow-hidden border border-gray-100">
+                  <div className="md:flex h-full">
+                    <div className="md:w-1/4 h-36 md:h-auto max-w-[220px]">
+                      <img 
+                        src={featuredEvent.image || "https://images.unsplash.com/photo-1540575467063-178a50c2df87?ixlib=rb-1.2.1&auto=format&fit=crop&w=800&q=80"} 
+                        alt={featuredEvent.title} 
+                        className="w-full h-full object-cover"
+                      />
+                    </div>
+                    <div className="p-6 md:w-3/4 flex flex-col h-full relative">
+                      <div className="flex justify-between items-start mb-2">
+                        <span className="px-3 py-1 rounded-full text-xs font-medium bg-[#2bcd82]/10 text-[#2bcd82]">
+                          Event
+                        </span>
+                        <span className="text-gray-500 text-sm">{formatDate(featuredEvent.date)}</span>
+                      </div>
+                      <h2 className="text-2xl font-bold text-gray-800 mb-2">{featuredEvent.title}</h2>
+                      <div className="flex items-center text-gray-600 mb-1">
+                        <Clock className="w-4 h-4 mr-2" />
+                        <span>{featuredEvent.time}</span>
+                      </div>
+                      <div className="flex items-center text-gray-600 mb-4">
+                        <MapPin className="w-4 h-4 mr-2" />
+                        <span>{featuredEvent.location}</span>
+                      </div>
+                      <p className="text-gray-600 mb-4 line-clamp-2">{featuredEvent.description}</p>
+                      <div className="mt-auto flex justify-end">
+                        <a 
+                          href={featuredEvent.registrationLink}
+                          target="_blank" 
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center bg-[#2bcd82] text-white hover:bg-[#25b975] font-medium py-2 px-4 rounded"
+                        >
+                          Register Now <ExternalLink className="w-4 h-4 ml-1" />
+                        </a>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+              
+              {/* News Card - Updated to match EventsNewsPage design */}
+              {featuredNews && (
+                <div className="bg-white rounded-lg shadow-md overflow-hidden border border-gray-100">
+                  <div className="md:flex h-full">
+                    <div className="md:w-1/4 h-36 md:h-auto max-w-[220px]">
+                      <img 
+                        src={featuredNews.image || "https://images.unsplash.com/photo-1551966775-a4ddc8df052b?ixlib=rb-1.2.1&auto=format&fit=crop&w=800&q=80"} 
+                        alt={featuredNews.title} 
+                        className="w-full h-full object-cover"
+                      />
+                    </div>
+                    <div className="p-6 md:w-3/4 flex flex-col h-full relative">
+                      <div className="flex justify-between items-start mb-2">
+                        <span className="px-3 py-1 rounded-full text-xs font-medium bg-[#fb6a69]/10 text-[#fb6a69]">
+                          News
+                        </span>
+                        <span className="text-gray-500 text-sm">{formatDate(featuredNews.date)}</span>
+                      </div>
+                      <h2 className="text-2xl font-bold text-gray-800 mb-2">{featuredNews.title}</h2>
+                      <div className="flex items-center text-gray-600 mb-4">
+                        <span className="font-medium">By: {featuredNews.author}</span>
+                      </div>
+                      <p className="text-gray-600 mb-4 line-clamp-2">{featuredNews.summary}</p>
+                      <div className="mt-auto flex justify-end">
+                        <a 
+                          href={featuredNews.readMoreLink}
+                          target="_blank" 
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center bg-[#fb6a69] text-white hover:bg-[#f5514f] font-medium py-2 px-4 rounded"
+                        >
+                          Read Full Article <ExternalLink className="w-4 h-4 ml-1" />
+                        </a>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
-          </div>
+          )}
           
           <div className="text-center mt-10">
             <Button 

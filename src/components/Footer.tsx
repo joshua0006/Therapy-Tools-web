@@ -2,8 +2,11 @@ import React from 'react';
 import { Link } from 'react-router-dom';
 import { Mail, Phone, MapPin, Facebook, Twitter, Instagram, Youtube } from 'lucide-react';
 import Logo from '../assets/images/cicle-logo.png';
+import { useAuth } from '../context/AuthContext';
 
 const Footer: React.FC = () => {
+  const { isLoggedIn } = useAuth();
+
   return (
     <footer className="bg-gray-800 text-white">
       {/* Newsletter Section */}
@@ -37,7 +40,7 @@ const Footer: React.FC = () => {
       {/* Main Footer */}
       <div className="py-12">
         <div className="container mx-auto px-4">
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-8">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
             <div>
               <div className="flex items-center mb-4">
                 <img src={Logo} alt="Adventures in Speech" className="h-10 w-10 mr-2" />
@@ -49,16 +52,13 @@ const Footer: React.FC = () => {
                 Premium resources for speech language pathologists to enhance their practice and improve client outcomes.
               </p>
               <div className="flex space-x-4">
-                <a href="https://facebook.com" target="_blank" rel="noopener noreferrer" className="text-gray-300 hover:text-[#2bcd82] transition-colors">
+                <a href="https://www.facebook.com/adventuresinspeechpathology/" target="_blank" rel="noopener noreferrer" className="text-gray-300 hover:text-[#2bcd82] transition-colors">
                   <Facebook className="w-5 h-5" />
                 </a>
-                <a href="https://twitter.com" target="_blank" rel="noopener noreferrer" className="text-gray-300 hover:text-[#2bcd82] transition-colors">
-                  <Twitter className="w-5 h-5" />
-                </a>
-                <a href="https://instagram.com" target="_blank" rel="noopener noreferrer" className="text-gray-300 hover:text-[#2bcd82] transition-colors">
+                <a href="https://www.instagram.com/adventuresinspeechpathology/?hl=en" target="_blank" rel="noopener noreferrer" className="text-gray-300 hover:text-[#2bcd82] transition-colors">
                   <Instagram className="w-5 h-5" />
                 </a>
-                <a href="https://youtube.com" target="_blank" rel="noopener noreferrer" className="text-gray-300 hover:text-[#2bcd82] transition-colors">
+                <a href="https://www.youtube.com/@AdventuresinSpeechPathology" target="_blank" rel="noopener noreferrer" className="text-gray-300 hover:text-[#2bcd82] transition-colors">
                   <Youtube className="w-5 h-5" />
                 </a>
               </div>
@@ -70,17 +70,9 @@ const Footer: React.FC = () => {
                 <li><Link to="/" className="text-gray-300 hover:text-[#2bcd82] transition-colors">Home</Link></li>
                 <li><Link to="/catalog" className="text-gray-300 hover:text-[#2bcd82] transition-colors">Resources</Link></li>
                 <li><Link to="/plans" className="text-gray-300 hover:text-[#2bcd82] transition-colors">Membership</Link></li>
-                <li><Link to="/" className="text-gray-300 hover:text-[#2bcd82] transition-colors">Login</Link></li>
-              </ul>
-            </div>
-            
-            <div>
-              <h4 className="text-lg font-bold mb-5 text-white">Resource Categories</h4>
-              <ul className="space-y-3">
-                <li><Link to="/catalog?category=articulation" className="text-gray-300 hover:text-[#2bcd82] transition-colors">Articulation</Link></li>
-                <li><Link to="/catalog?category=language" className="text-gray-300 hover:text-[#2bcd82] transition-colors">Language</Link></li>
-                <li><Link to="/catalog?category=social" className="text-gray-300 hover:text-[#2bcd82] transition-colors">Social Skills</Link></li>
-                <li><Link to="/catalog?category=assessment" className="text-gray-300 hover:text-[#2bcd82] transition-colors">Assessment</Link></li>
+                {!isLoggedIn && (
+                  <li><Link to="/signin" className="text-gray-300 hover:text-[#2bcd82] transition-colors">Login</Link></li>
+                )}
               </ul>
             </div>
             
@@ -89,15 +81,12 @@ const Footer: React.FC = () => {
               <ul className="space-y-3">
                 <li className="flex items-center">
                   <Mail className="w-5 h-5 mr-3 text-[#2bcd82]" />
-                  <a href="mailto:info@speechadventures.com" className="text-gray-300 hover:text-[#2bcd82] transition-colors">info@speechadventures.com</a>
+                  <a href="mailto:support@adventuresinspeechpathology.com" className="text-gray-300 hover:text-[#2bcd82] transition-colors">support@adventuresinspeechpathology.com</a>
                 </li>
-                <li className="flex items-center">
-                  <Phone className="w-5 h-5 mr-3 text-[#2bcd82]" />
-                  <a href="tel:1234567890" className="text-gray-300 hover:text-[#2bcd82] transition-colors">(123) 456-7890</a>
-                </li>
+              
                 <li className="flex items-start">
                   <MapPin className="w-5 h-5 mr-3 text-[#2bcd82] mt-1" />
-                  <span className="text-gray-300">123 Therapy Lane<br />Speech City, ST 12345</span>
+                  <span className="text-gray-300">2/17 Arnott St, <br /> Edgeworth NSW 2285 <br /> Australia</span>
                 </li>
               </ul>
             </div>

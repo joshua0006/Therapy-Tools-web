@@ -104,18 +104,20 @@ const PlansPage: React.FC = () => {
                   Popular
                 </div>
               )}
-              <div className="p-8">
-                <h3 className="text-2xl font-bold text-gray-800 mb-2">{plan.name}</h3>
-                <div className="mb-4">
-                  <span className="text-4xl font-bold text-[#fb6a69]">{plan.price}</span>
-                  <span className="text-gray-500"> {plan.period}</span>
+              <div className="p-8 flex flex-col h-full">
+                <div className="flex-1">
+                  <h3 className="text-2xl font-bold text-gray-800 mb-2">{plan.name}</h3>
+                  <div className="mb-4">
+                    <span className="text-4xl font-bold text-[#fb6a69]">{plan.price}</span>
+                    <span className="text-gray-500"> {plan.period}</span>
+                  </div>
+                  <p className="text-gray-600 mb-6 min-h-[60px]">{plan.description}</p>
                 </div>
-                <p className="text-gray-600 mb-6">{plan.description}</p>
                 
                 <Button 
                   variant="primary" 
                   size="large" 
-                  className="w-full mb-8"
+                  className="w-full mb-8 mt-auto"
                   onClick={() => handleGetStarted(plan.id)}
                 >
                   Get Started

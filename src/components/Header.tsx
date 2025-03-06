@@ -1,13 +1,22 @@
 import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { ShoppingBag, CreditCard, LogIn, User, Menu, X, FileText, Bell, BookOpen } from 'lucide-react';
+import { ShoppingBag, CreditCard, LogIn, User, Menu, X, FileText, Bell, BookOpen, Activity, ShoppingCart } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import Logo from '../assets/images/cicle-logo.png';
 
 const Header: React.FC = () => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
-  const { isLoggedIn, login, logout } = useAuth();
+  const { isLoggedIn, user, logout } = useAuth();
   const navigate = useNavigate();
+  
+  const handleLogout = async () => {
+    try {
+      await logout();
+      navigate('/');
+    } catch (error) {
+      console.error('Logout failed', error);
+    }
+  };
   
   return (
     <>
@@ -39,8 +48,8 @@ const Header: React.FC = () => {
                 <Link to="/monthly-articles" className="text-gray-700 hover:text-[#2bcd82] font-medium transition-colors flex items-center">
                   <BookOpen className="w-5 h-5 mr-2" /> Monthly Articles
                 </Link>
-                <Link to="/dashboard" className="text-gray-700 hover:text-[#2bcd82] font-medium transition-colors flex items-center">
-                  <FileText className="w-5 h-5 mr-2" /> My Library
+                <Link to="/purchases" className="text-gray-700 hover:text-[#2bcd82] font-medium transition-colors flex items-center">
+                  <ShoppingCart className="w-5 h-5 mr-2" /> My Purchases
                 </Link>
               </>
             )}
@@ -48,23 +57,19 @@ const Header: React.FC = () => {
             {isLoggedIn ? (
               <button 
                 className="bg-[#fb6a69] hover:bg-[#e05958] text-white px-5 py-2 rounded-full font-medium transition-colors flex items-center"
-                onClick={() => {
-                  logout();
-                  navigate('/');
-                }}
+                onClick={handleLogout}
               >
                 <User className="w-5 h-5 mr-2" /> Log Out
               </button>
             ) : (
-              <button 
-                className="bg-[#2bcd82] hover:bg-[#25b975] text-white px-5 py-2 rounded-full font-medium transition-colors flex items-center"
-                onClick={() => {
-                  login();
-                  navigate('/');
-                }}
-              >
-                <LogIn className="w-5 h-5 mr-2" /> Log In
-              </button>
+              <div className="flex items-center space-x-4">
+                <Link 
+                  to="/signin" 
+                  className="bg-[#2bcd82] hover:bg-[#25b975] text-white px-5 py-2 rounded-full font-medium transition-colors flex items-center"
+                >
+                  <LogIn className="w-5 h-5 mr-2" /> Sign In
+                </Link>
+              </div>
             )}
           </nav>
           
@@ -116,11 +121,11 @@ const Header: React.FC = () => {
                     <BookOpen className="w-5 h-5 mr-2" /> Monthly Articles
                   </Link>
                   <Link 
-                    to="/dashboard" 
+                    to="/purchases" 
                     className="text-gray-700 hover:text-[#2bcd82] font-medium transition-colors flex items-center"
                     onClick={() => setIsMenuOpen(false)}
                   >
-                    <FileText className="w-5 h-5 mr-2" /> My Library
+                    <ShoppingCart className="w-5 h-5 mr-2" /> My Purchases
                   </Link>
                 </>
               )}
@@ -129,24 +134,20 @@ const Header: React.FC = () => {
                 <button 
                   className="text-gray-700 hover:text-[#2bcd82] font-medium transition-colors flex items-center text-left"
                   onClick={() => {
-                    logout();
+                    handleLogout();
                     setIsMenuOpen(false);
-                    navigate('/');
                   }}
                 >
                   <User className="w-5 h-5 mr-2" /> Log Out
                 </button>
               ) : (
-                <button 
-                  className="text-gray-700 hover:text-[#2bcd82] font-medium transition-colors flex items-center text-left"
-                  onClick={() => {
-                    login();
-                    setIsMenuOpen(false);
-                    navigate('/');
-                  }}
+                <Link 
+                  to="/signin"
+                  className="text-gray-700 hover:text-[#2bcd82] font-medium transition-colors flex items-center"
+                  onClick={() => setIsMenuOpen(false)}
                 >
-                  <LogIn className="w-5 h-5 mr-2" /> Log In
-                </button>
+                  <LogIn className="w-5 h-5 mr-2" /> Sign In
+                </Link>
               )}
             </nav>
           </div>
