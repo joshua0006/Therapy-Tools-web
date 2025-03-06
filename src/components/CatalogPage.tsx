@@ -1,46 +1,28 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Header from './Header';
 import Footer from './Footer';
-import { Search, Filter, Grid, ShoppingCart, Loader, FileText } from 'lucide-react';
+import { Search, Filter, Grid, ShoppingCart, Loader } from 'lucide-react';
 import { useCart } from '../context/CartContext';
 import { useWooCommerce } from '../context/WooCommerceContext';
-import { Product, Category } from '../types';
 import { toast } from 'react-hot-toast';
 
 const CatalogPage: React.FC = () => {
-  const [searchTerm, setSearchTerm] = useState('');
-  const [selectedCategory, setSelectedCategory] = useState('all');
-  const [isCartLoaded, setIsCartLoaded] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [selectedCategory, setSelectedCategory] = useState<string>('all');
+  
+  const { addToCart } = useCart();
   const navigate = useNavigate();
   
   const { products, categories, loading, error } = useWooCommerce();
   
-  // Default addToCart function that shows error toast
-  let addToCart = (_resource: any) => {
-    toast.error("Unable to add to cart. Please try reloading the page.");
-  };
-  
-  // Try to get real addToCart function from context
-  try {
-    const cart = useCart();
-    addToCart = cart.addToCart;
-    // If we get here, the cart is loaded
-    if (!isCartLoaded) setIsCartLoaded(true);
-  } catch (error) {
-    console.error("Failed to load cart in catalog:", error);
-  }
-  
   // Filter products based on search and category
-  const filteredProducts = products.filter(product => {
-    const matchesSearch = 
-      searchTerm === '' ||
-      product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      product.description.toLowerCase().includes(searchTerm.toLowerCase());
+  const filteredProducts = products.filter((product: any) => {
+    const matchesSearch = product.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
+                        product.description.toLowerCase().includes(searchQuery.toLowerCase());
     
-    const matchesCategory = 
-      selectedCategory === 'all' || 
-      product.category === selectedCategory;
+    const matchesCategory = selectedCategory === 'all' || 
+                           (product.categories && product.categories.some((cat: {id: string}) => cat.id === selectedCategory));
     
     return matchesSearch && matchesCategory;
   });
@@ -64,8 +46,8 @@ const CatalogPage: React.FC = () => {
               <input
                 type="text"
                 placeholder="Search resources..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
                 className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#2bcd82] focus:border-transparent"
               />
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
@@ -79,7 +61,7 @@ const CatalogPage: React.FC = () => {
                 className="border border-gray-300 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-[#2bcd82] focus:border-transparent"
               >
                 <option value="all">All Categories</option>
-                {categories.map((category) => (
+                {categories.map((category: any) => (
                   <option key={category.id} value={category.id}>{category.name}</option>
                 ))}
               </select>
@@ -136,7 +118,7 @@ const CatalogPage: React.FC = () => {
         {/* Grid View (Now the only view) */}
         {!loading && !error && filteredProducts.length > 0 && (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {filteredProducts.map((product) => (
+            {filteredProducts.map((product: any) => (
               <div onClick={() => navigate(`/resource/${product.id}`)} key={product.id} className="bg-white cursor-pointer rounded-xl overflow-hidden shadow-sm hover:shadow-md transition-all duration-300 flex flex-col h-full border border-gray-100">
                 <div className="relative h-48 overflow-hidden bg-gray-100">
                   {product.thumbnail ? (
@@ -167,11 +149,15 @@ const CatalogPage: React.FC = () => {
                     <div className="flex space-x-2">
                       <button 
                         className="text-white bg-[#2bcd82] flex items-center gap-2 hover:bg-[#25b975] p-2 rounded-lg transition-colors"
-                        onClick={() => {
+                        onClick={(e) => {
+                          e.stopPropagation();
                           addToCart({
                             id: product.id,
                             title: product.name,
-                            price: Number(product.price),
+                            description: product.description || '',
+                            category: product.categories?.[0]?.name || 'Uncategorized',
+                            imageUrl: product.thumbnail || '',
+                            price: product.price.toString(),
                             quantity: 1
                           });
                           toast.success(`${product.name} added to cart!`);
@@ -193,4 +179,4 @@ const CatalogPage: React.FC = () => {
   );
 };
 
-export default CatalogPage; 
+export default CatalogPage;

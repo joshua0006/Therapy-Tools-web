@@ -251,11 +251,11 @@ const HomePage: React.FC = () => {
             </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-              {featuredProducts.map((product, index) => (
+              {featuredProducts.map((product) => (
                 <div 
                   key={product.id} 
-                  className="bg-white rounded-lg overflow-hidden shadow-md hover:shadow-lg transition-all hover:-translate-y-1 cursor-pointer"
-                  onClick={() => navigate(`/resource/${product.id}`)}
+                  className="bg-white rounded-lg shadow-md overflow-hidden cursor-pointer transition-transform hover:scale-105"
+                  onClick={() => navigate(`/product/${product.id}`)}
                 >
                   <div className="h-48 overflow-hidden">
                     <img 
@@ -272,7 +272,7 @@ const HomePage: React.FC = () => {
                         className="bg-[#2bcd82] hover:bg-[#25b975] text-white font-medium py-1 px-4 rounded-full"
                         onClick={(e) => {
                           e.stopPropagation(); // Prevent triggering the parent card's onClick
-                          navigate(`/resource/${product.id}`);
+                          navigate(`/product/${product.id}`);
                         }}
                       >
                         View Details

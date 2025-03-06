@@ -1,16 +1,28 @@
 /**
- * Firestore Module
+ * Firestore Database Module
  * 
- * Handles all Firestore database operations:
+ * Handles all interactions with Firestore:
  * - User profiles
- * - Purchase tracking
- * - Membership management
+ * - Purchase history
+ * - Membership data
+ * - Usage statistics
  */
 
-import { getFirestore, collection, doc, setDoc, getDoc, getDocs, query, where, addDoc, deleteDoc, updateDoc } from 'firebase/firestore';
+import { 
+  getFirestore, 
+  collection, 
+  doc, 
+  setDoc, 
+  getDoc, 
+  getDocs, 
+  query, 
+  where, 
+  addDoc, 
+  updateDoc 
+} from 'firebase/firestore';
 import { app } from './index';
 
-// Initialize Firestore using the existing app instance
+// Initialize Firestore
 const db = getFirestore(app);
 
 // Collection references

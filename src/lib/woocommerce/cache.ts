@@ -26,7 +26,7 @@ const cache: Cache = {
 /**
  * Check if a cache item is still valid
  */
-function isValid<T>(item: CacheItem<T> | null): boolean {
+function isValid<T>(item: CacheItem<T> | null | undefined): boolean {
   if (!item) return false;
   return Date.now() - item.timestamp < CACHE_TTL;
 }

@@ -1,6 +1,6 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
-import { Mail, Phone, MapPin, Facebook, Twitter, Instagram, Youtube } from 'lucide-react';
+import { Mail, MapPin, Facebook, Instagram, Youtube } from 'lucide-react';
 import Logo from '../assets/images/cicle-logo.png';
 import { useAuth } from '../context/AuthContext';
 

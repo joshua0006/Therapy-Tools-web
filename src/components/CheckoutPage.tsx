@@ -5,17 +5,9 @@ import Footer from './Footer';
 import Button from './Button';
 // import StripePayment from './StripePayment';
 import PayPalPayment from './PayPalPayment';
-import { CreditCard, CircleDollarSign, ShieldCheck, Lock, CheckCircle2 } from 'lucide-react';
+import { CreditCard, CircleDollarSign, ShieldCheck, Lock } from 'lucide-react';
 import { useCart, CartItem } from '../context/CartContext';
 import { useAuth } from '../context/AuthContext';
-
-// Import or define card brand images
-const CARD_LOGOS = {
-  visa: "https://cdn.jsdelivr.net/gh/stephenhutchings/typicons.font@master/src/svg/credit-card.svg",
-  mastercard: "https://cdn.jsdelivr.net/gh/stephenhutchings/typicons.font@master/src/svg/credit-card.svg",
-  amex: "https://cdn.jsdelivr.net/gh/stephenhutchings/typicons.font@master/src/svg/credit-card.svg",
-  paypal: "https://www.paypalobjects.com/webstatic/mktg/logo/pp_cc_mark_37x23.jpg"
-};
 
 interface CheckoutPageProps {
   productId?: string; // Optional product ID from URL

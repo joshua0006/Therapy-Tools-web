@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, ShoppingCart, Check, Star, Download, Loader, Clock, BookOpen, Users, Tag } from 'lucide-react';
+import { ArrowLeft, ShoppingCart, Check, Star, Loader, Clock, BookOpen, Users } from 'lucide-react';
 import Header from './Header';
 import Footer from './Footer';
 import Button from './Button';
@@ -178,16 +178,17 @@ const ResourceDetailPage: React.FC = () => {
               
               <h1 className="text-3xl md:text-4xl font-bold text-gray-800 mb-4 leading-tight">{product.name}</h1>
               
-              <div className="flex items-center mb-6">
+              <div className="flex items-center mt-4">
                 <div className="flex">
-                  {[1, 2, 3, 4, 5].map((star) => (
-                    <Star 
-                      key={star} 
-                      className={`w-5 h-5 ${star <= 5 ? 'text-yellow-400 fill-yellow-400' : 'text-gray-300'}`} 
+                  {[1, 2, 3, 4, 5].map((idx) => (
+                    <Star
+                      key={idx}
+                      className={`w-5 h-5 ${idx <= 4 ? 'text-yellow-400' : 'text-gray-300'}`}
+                      fill={idx <= 4 ? 'currentColor' : 'none'}
                     />
                   ))}
                 </div>
-                <span className="text-gray-600 ml-2">(32 reviews)</span>
+                <span className="ml-2 text-gray-600">(12 reviews)</span>
               </div>
               
               <div className="flex flex-wrap gap-6 mb-8 text-sm">
@@ -467,10 +468,10 @@ const ResourceDetailPage: React.FC = () => {
                         <h4 className="font-medium text-gray-800">Jane Doe, SLP</h4>
                         <div className="flex items-center">
                           <div className="flex">
-                            {[1, 2, 3, 4, 5].map((star) => (
+                            {[1, 2, 3, 4, 5].map((_, idx) => (
                               <Star 
-                                key={star} 
-                                className="w-4 h-4 text-yellow-400 fill-yellow-400" 
+                                key={idx} 
+                                className={`w-4 h-4 ${idx < 4 ? 'text-yellow-400 fill-yellow-400' : 'text-gray-300'}`} 
                               />
                             ))}
                           </div>
@@ -493,7 +494,7 @@ const ResourceDetailPage: React.FC = () => {
                         <h4 className="font-medium text-gray-800">Mark Smith</h4>
                         <div className="flex items-center">
                           <div className="flex">
-                            {[1, 2, 3, 4, 5].map((star, idx) => (
+                            {[1, 2, 3, 4, 5].map((_, idx) => (
                               <Star 
                                 key={idx} 
                                 className={`w-4 h-4 ${idx < 4 ? 'text-yellow-400 fill-yellow-400' : 'text-gray-300'}`} 

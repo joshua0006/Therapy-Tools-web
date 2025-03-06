@@ -1,11 +1,11 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import Header from './Header';
 import Footer from './Footer';
-import { Calendar, Clock, MapPin, ExternalLink, Bell, ChevronRight, Search, ArrowLeft, Users, Phone, Mail, CreditCard, CheckCircle, X, ChevronDown, Share2 } from 'lucide-react';
+import { Calendar, Clock, MapPin, ExternalLink, Bell, Search, ArrowLeft, Users, Phone, Mail, UserCircle, PhoneCall, CalendarClock, Tag, AlertCircle, Languages, CircleDollarSign, Lock } from 'lucide-react';
 import { useEventsNews } from '../context/EventsNewsContext';
 import { formatDate } from '../utils/formatters';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { Event as BaseEvent, News, fetchEventDetails } from '../lib/woocommerce/events-news';
+import { Event as BaseEvent, fetchEventDetails } from '../lib/woocommerce/events-news';
 
 // Extend the base Event type with additional fields for the detailed view
 interface EventWithDetails extends BaseEvent {
@@ -47,12 +47,11 @@ const EventsNewsPage: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'all' | 'events' | 'news'>(
     locationState?.activeTab || 'all'
   );
-  const [searchTerm, setSearchTerm] = useState('');
+  const [searchTerm, setSearchTerm] = useState<string>('');
   const [selectedEvent, setSelectedEvent] = useState<number | null>(
     locationState?.selectedEventId || null
   );
   const [showEventDetails, setShowEventDetails] = useState<boolean>(!!locationState?.selectedEventId);
-  const [ticketQuantity, setTicketQuantity] = useState<number>(1);
   const [eventDetail, setEventDetail] = useState<Event | null>(null);
   const [loadingEventDetails, setLoadingEventDetails] = useState(false);
   const [eventDetailsError, setEventDetailsError] = useState<string | null>(null);
@@ -263,56 +262,130 @@ const EventsNewsPage: React.FC = () => {
                       </div>
                     </div>
                     
-                    {/* Price and Registration */}
-                    <div className="bg-gray-50 p-4 rounded-lg mb-6">
-                      <div className="flex justify-between items-center mb-4">
-                        <span className="text-lg font-semibold text-gray-800">Registration Fee</span>
-                        <span className="text-2xl font-bold text-[#2bcd82]">${currentEvent.price ?? 99}</span>
-                      </div>
-                      <a
-                        href={currentEvent.registrationLink ?? "#"}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="block w-full bg-[#2bcd82] hover:bg-[#25b975] text-white font-medium py-3 px-4 rounded text-center transition-colors"
-                      >
-                        Register Now
-                      </a>
-                      <div className="mt-2 text-center text-gray-500 text-sm">
-                        Secure checkout with PayPal or credit card
-                      </div>
-                    </div>
+                    {/* About This Event - Redesigned */}
+                    <div className="mb-8 rounded-xl border border-gray-100 overflow-hidden">
                     
-                    {/* About This Event */}
-                    <div className="mb-6">
-                      <h2 className="text-xl font-bold text-gray-800 mb-3">About this Event</h2>
-                      <div className="prose max-w-none text-gray-700">
-                        <p className="mb-4">{currentEvent.description}</p>
+                      
+                      <div className="p-5">
+                      
+                        
+                        {/* Price and Registration - Moved here and redesigned */}
+                        <div className="bg-[#f1fef7] border border-[#c0f0d9] rounded-lg p-4 mb-6">
+                          <div className="flex flex-col md:flex-row md:justify-between md:items-center gap-4 mb-4">
+                            <div>
+                              <h3 className="font-semibold text-gray-800 mb-1 flex items-center">
+                                <CircleDollarSign className="w-5 h-5 mr-2 text-[#2bcd82]" />
+                                Registration Fee
+                              </h3>
+                              <p className="text-gray-600 text-sm">Secure your spot for this event</p>
+                            </div>
+                            <div className="text-center md:text-right">
+                              <div className="text-3xl font-bold text-[#2bcd82]">${currentEvent.price ?? 99}</div>
+                              <div className="text-gray-500 text-sm">per person</div>
+                            </div>
+                          </div>
+                          <a
+                            href={currentEvent.registrationLink ?? "#"}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="block w-full bg-[#2bcd82] hover:bg-[#25b975] text-white font-medium py-3 px-4 rounded-md text-center transition-colors"
+                          >
+                            Register Now
+                          </a>
+                          <div className="mt-3 text-center text-gray-500 text-sm flex items-center justify-center">
+                            <Lock className="w-4 h-4 mr-1 text-gray-400" />
+                            Secure checkout with PayPal or credit card
+                          </div>
+                        </div>
+                        
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-6">
+                          {/* Presenter Information - Card Style */}
+                          <div className="bg-[#f8f9fa] rounded-lg p-4">
+                            <h3 className="font-semibold text-gray-800 mb-3 flex items-center">
+                              <UserCircle className="w-5 h-5 mr-2 text-[#2bcd82]" />
+                              Presenter
+                            </h3>
+                            <div className="flex items-center">
+                              <div className="w-12 h-12 rounded-full bg-[#e0f5eb] flex items-center justify-center text-[#2bcd82] mr-3">
+                                {currentEvent.presenter?.charAt(0) || "S"}
+                              </div>
+                              <div>
+                                <p className="text-gray-800 font-medium">{currentEvent.presenter ?? "Dr. Sarah Johnson"}</p>
+                                <p className="text-gray-500 text-sm">{currentEvent.organizer ?? "Speech Pathology Organization"}</p>
+                              </div>
+                            </div>
+                          </div>
+                          
+                          {/* Contact Information - Card Style */}
+                          <div className="bg-[#f8f9fa] rounded-lg p-4">
+                            <h3 className="font-semibold text-gray-800 mb-3 flex items-center">
+                              <PhoneCall className="w-5 h-5 mr-2 text-[#2bcd82]" />
+                              Contact
+                            </h3>
+                            <div className="space-y-2">
+                              <div className="flex items-center">
+                                <Mail className="w-4 h-4 mr-3 text-gray-500" />
+                                <a href={`mailto:${currentEvent.contactEmail ?? "events@speechpathology.com"}`} className="text-gray-700 hover:text-[#2bcd82] transition-colors">
+                                  {currentEvent.contactEmail ?? "events@speechpathology.com"}
+                                </a>
+                              </div>
+                              <div className="flex items-center">
+                                <Phone className="w-4 h-4 mr-3 text-gray-500" />
+                                <a href={`tel:${currentEvent.contactPhone ?? "(555) 123-4567"}`} className="text-gray-700 hover:text-[#2bcd82] transition-colors">
+                                  {currentEvent.contactPhone ?? "(555) 123-4567"}
+                                </a>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                        
+                        {/* Event Details - Additional Information */}
+                        <div className="mt-6 bg-[#f8f9fa] rounded-lg p-4">
+                          <h3 className="font-semibold text-gray-800 mb-3 flex items-center">
+                            <CalendarClock className="w-5 h-5 mr-2 text-[#2bcd82]" />
+                            Event Details
+                          </h3>
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div className="flex items-start">
+                              <Tag className="w-4 h-4 mr-3 text-gray-500 mt-1" />
+                              <div>
+                                <span className="block text-sm text-gray-500">Category</span>
+                                <span className="block text-gray-800">Professional Development</span>
+                              </div>
+                            </div>
+                            <div className="flex items-start">
+                              <Users className="w-4 h-4 mr-3 text-gray-500 mt-1" />
+                              <div>
+                                <span className="block text-sm text-gray-500">Capacity</span>
+                                <span className="block text-gray-800">{currentEvent.seats ?? 50} seats total</span>
+                              </div>
+                            </div>
+                            <div className="flex items-start">
+                              <Clock className="w-4 h-4 mr-3 text-gray-500 mt-1" />
+                              <div>
+                                <span className="block text-sm text-gray-500">Duration</span>
+                                <span className="block text-gray-800">2 hours</span>
+                              </div>
+                            </div>
+                            <div className="flex items-start">
+                              <Languages className="w-4 h-4 mr-3 text-gray-500 mt-1" />
+                              <div>
+                                <span className="block text-sm text-gray-500">Language</span>
+                                <span className="block text-gray-800">English</span>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                        
+                        {/* Cancellation Policy */}
+                        <div className="mt-6 border border-gray-100 rounded-lg p-4">
+                          <h3 className="font-semibold text-gray-800 mb-2 flex items-center">
+                            <AlertCircle className="w-5 h-5 mr-2 text-[#2bcd82]" />
+                            Cancellation Policy
+                          </h3>
+                          <p className="text-gray-700 text-sm leading-relaxed">{currentEvent.cancellationPolicy ?? "Full refund up to 7 days before the event. No refunds within 7 days of the event."}</p>
+                        </div>
                       </div>
-                    </div>
-                    
-                    {/* Presenter Information */}
-                    <div className="mb-6">
-                      <h3 className="font-semibold text-gray-800 mb-2">Presenter</h3>
-                      <p className="text-gray-700">{currentEvent.presenter ?? "Dr. Sarah Johnson"}</p>
-                    </div>
-                    
-                    {/* Contact Information */}
-                    <div className="mb-6">
-                      <h3 className="font-semibold text-gray-800 mb-2">Contact</h3>
-                      <div className="flex items-center mb-1">
-                        <Mail className="w-4 h-4 mr-2 text-gray-500" />
-                        <span className="text-gray-700">{currentEvent.contactEmail ?? "events@speechpathology.com"}</span>
-                      </div>
-                      <div className="flex items-center">
-                        <Phone className="w-4 h-4 mr-2 text-gray-500" />
-                        <span className="text-gray-700">{currentEvent.contactPhone ?? "(555) 123-4567"}</span>
-                      </div>
-                    </div>
-                    
-                    {/* Cancellation Policy */}
-                    <div>
-                      <h3 className="font-semibold text-gray-800 mb-2">Cancellation Policy</h3>
-                      <p className="text-gray-700">{currentEvent.cancellationPolicy ?? "Full refund up to 7 days before the event. No refunds within 7 days of the event."}</p>
                     </div>
                   </div>
                 </div>
