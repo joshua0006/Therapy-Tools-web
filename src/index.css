@@ -1,1 +1,10 @@
 @import "tailwindcss";
+
+/* Add pointer cursor to interactive elements */
+button:hover,
+a:hover,
+[role="button"]:hover,
+.btn:hover,
+.clickable:hover {
+  cursor: pointer;
+}

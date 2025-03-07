@@ -84,11 +84,12 @@ const PlansPage: React.FC = () => {
       <Header />
 
       <main className="container mx-auto px-4 py-12">
-        <div className="text-center mb-16">
-          <h1 className="text-4xl font-bold text-gray-800 mb-4">Membership Plans</h1>
-          <p className="text-xl text-gray-600 max-w-3xl mx-auto">
+        <div className="text-center mb-12 bg-white rounded-2xl p-8 shadow-sm">
+          <h1 className="text-4xl font-bold mb-4 bg-clip-text text-transparent bg-gradient-to-r from-[#2bcd82] to-[#25b975]">Membership Plans</h1>
+          <p className="text-lg text-gray-600 max-w-3xl mx-auto">
             Choose the perfect plan to access our comprehensive speech pathology resources
           </p>
+          <div className="mt-6 max-w-sm mx-auto h-1 bg-gradient-to-r from-[#2bcd82] to-transparent rounded-full"></div>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-8 max-w-6xl mx-auto">

@@ -9,6 +9,43 @@ import { useWooCommerce } from '../context/WooCommerceContext';
 import { useEventsNews } from '../context/EventsNewsContext';
 import { formatCurrency, formatDate } from '../utils/formatters';
 
+// Skeleton Loaders
+const CarouselSkeleton = () => (
+  <div className="bg-gray-100 animate-pulse rounded-lg h-full w-full">
+    <div className="h-full w-full flex items-center justify-center">
+      <div className="text-gray-400">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#2bcd82]"></div>
+      </div>
+    </div>
+  </div>
+);
+
+const ProductCardSkeleton = () => (
+  <div className="bg-white rounded-lg shadow-md overflow-hidden animate-pulse">
+    <div className="h-48 bg-gray-200"></div>
+    <div className="p-4">
+      <div className="h-6 bg-gray-200 rounded mb-3 w-3/4"></div>
+      <div className="h-4 bg-gray-200 rounded mb-2 w-1/2"></div>
+      <div className="h-4 bg-gray-200 rounded mb-2 w-5/6"></div>
+      <div className="h-4 bg-gray-200 rounded mb-4 w-4/6"></div>
+      <div className="h-10 bg-gray-200 rounded w-full"></div>
+    </div>
+  </div>
+);
+
+const EventCardSkeleton = () => (
+  <div className="bg-white rounded-lg shadow-md overflow-hidden animate-pulse">
+    <div className="h-48 bg-gray-200"></div>
+    <div className="p-4">
+      <div className="h-5 bg-gray-200 rounded mb-3 w-1/4"></div>
+      <div className="h-6 bg-gray-200 rounded mb-3 w-3/4"></div>
+      <div className="h-4 bg-gray-200 rounded mb-2 w-1/2"></div>
+      <div className="h-4 bg-gray-200 rounded mb-4 w-5/6"></div>
+      <div className="h-10 bg-gray-200 rounded w-1/3"></div>
+    </div>
+  </div>
+);
+
 const HomePage: React.FC = () => {
   const { isLoggedIn } = useAuth();
   const navigate = useNavigate();
@@ -20,21 +57,36 @@ const HomePage: React.FC = () => {
     loading: eventsNewsLoading 
   } = useEventsNews();
   
+  const [isPageLoaded, setIsPageLoaded] = useState(false);
+  
   // Carousel state
   const [currentSlide, setCurrentSlide] = useState(0);
   
   // Use events for the carousel instead of products
   const carouselEvents = events.slice(0, 4);
 
+  // Mark page as loaded once data is ready
+  useEffect(() => {
+    if (!productsLoading && !eventsNewsLoading) {
+      // Add a small delay to ensure smooth transition
+      const timer = setTimeout(() => {
+        setIsPageLoaded(true);
+      }, 300);
+      return () => clearTimeout(timer);
+    }
+  }, [productsLoading, eventsNewsLoading]);
+
   // Auto-rotate carousel
   useEffect(() => {
+    if (!isPageLoaded) return;
+    
     const interval = setInterval(() => {
       if (carouselEvents.length > 0) {
         setCurrentSlide((prev) => (prev + 1) % carouselEvents.length);
       }
     }, 5000);
     return () => clearInterval(interval);
-  }, [carouselEvents.length]);
+  }, [carouselEvents.length, isPageLoaded]);
 
   // Manual navigation
   const prevSlide = () => {
@@ -98,9 +150,7 @@ const HomePage: React.FC = () => {
               <div className="relative w-full">
                 <div className="rounded-lg overflow-hidden shadow-xl h-[28rem] w-full relative">
                   {eventsNewsLoading ? (
-                    <div className="flex justify-center items-center h-full bg-gray-100">
-                      <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#2bcd82]"></div>
-                    </div>
+                    <CarouselSkeleton />
                   ) : (
                     carouselEvents.map((event, index) => (
                       <div 
@@ -158,14 +208,14 @@ const HomePage: React.FC = () => {
                   </div>
                   
                   {/* Carousel Indicators */}
-                  <div className="absolute bottom-24 left-0 right-0 flex justify-center space-x-3">
+                  <div className="absolute bottom-20 left-0 right-0 flex justify-center space-x-2">
                     {carouselEvents.map((_, index) => (
                       <button
                         key={index}
-                        onClick={() => setCurrentSlide(index)}
-                        className={`w-3 h-3 rounded-full transition-colors ${
-                          index === currentSlide ? 'bg-[#2bcd82]' : 'bg-white/50'
+                        className={`w-3 h-3 rounded-full ${
+                          index === currentSlide ? 'bg-[#2bcd82]' : 'bg-white/40'
                         }`}
+                        onClick={() => setCurrentSlide(index)}
                         aria-label={`Go to slide ${index + 1}`}
                       />
                     ))}
@@ -255,7 +305,7 @@ const HomePage: React.FC = () => {
                 <div 
                   key={product.id} 
                   className="bg-white rounded-lg shadow-md overflow-hidden cursor-pointer transition-transform hover:scale-105"
-                  onClick={() => navigate(`/product/${product.id}`)}
+                  onClick={() => navigate(`/resource/${product.id}`)}
                 >
                   <div className="h-48 overflow-hidden">
                     <img 
@@ -272,7 +322,7 @@ const HomePage: React.FC = () => {
                         className="bg-[#2bcd82] hover:bg-[#25b975] text-white font-medium py-1 px-4 rounded-full"
                         onClick={(e) => {
                           e.stopPropagation(); // Prevent triggering the parent card's onClick
-                          navigate(`/product/${product.id}`);
+                          navigate(`/resource/${product.id}`);
                         }}
                       >
                         View Details
@@ -478,6 +528,8 @@ const HomePage: React.FC = () => {
           </div>
         </div>
       </div>
+
+     
 
       <Footer />
     </div>

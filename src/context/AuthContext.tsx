@@ -34,6 +34,7 @@ interface AuthContextType {
   recordUserPurchase: (purchaseData: any) => Promise<any>;
   getUserPurchaseHistory: () => Promise<any[]>;
   updateMembership: (membershipData: any) => Promise<void>;
+  testLogin: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -48,41 +49,48 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser: FirebaseUser | null) => {
       setLoading(true);
       if (firebaseUser) {
-        // User is logged in
-        setIsLoggedIn(true);
-        
-        // Get user profile from Firestore
-        const userProfile = await getUserProfile(firebaseUser.uid);
-        
-        if (userProfile) {
+        try {
+          let userProfile = await getUserProfile(firebaseUser.uid);
+          
+          if (!userProfile) {
+            // Create new user profile with required fields
+            userProfile = {
+              id: firebaseUser.uid,
+              email: firebaseUser.email || '',
+              name: firebaseUser.displayName || 'User',
+              createdAt: new Date().toISOString(),
+              lastLogin: new Date().toISOString(),
+              subscription: {
+                status: 'inactive',
+                plan: 'none',
+                endDate: new Date().toISOString(),
+              },
+              purchases: [],
+              membershipInfo: {
+                joinDate: new Date().toISOString(),
+                status: 'free',
+                expiryDate: null
+              }
+            };
+            
+            // Save the complete profile
+            await saveUserProfile(firebaseUser.uid, userProfile);
+          } else {
+            // Update last login timestamp while preserving existing data
+            await saveUserProfile(firebaseUser.uid, {
+              ...userProfile,
+              lastLogin: new Date().toISOString()
+            });
+          }
+          
           setUser(userProfile as UserProfile);
-        } else {
-          // Create default user profile if none exists
-          const defaultProfile = {
-            id: firebaseUser.uid,
-            email: firebaseUser.email || '',
-            name: firebaseUser.displayName || 'User',
-            subscription: {
-              status: 'inactive',
-              plan: 'none',
-              endDate: new Date().toISOString(),
-            },
-            purchases: [],
-            createdAt: new Date().toISOString(),
-            lastLogin: new Date().toISOString(),
-            membershipInfo: {
-              joinDate: new Date().toISOString(),
-              status: 'free',
-              expiryDate: null
-            }
-          };
-          await saveUserProfile(firebaseUser.uid, defaultProfile);
-          setUser(defaultProfile);
+          setIsLoggedIn(true);
+        } catch (error) {
+          console.error('Error loading user profile:', error);
         }
       } else {
-        // User is logged out
-        setIsLoggedIn(false);
         setUser(null);
+        setIsLoggedIn(false);
       }
       setLoading(false);
     });
@@ -90,7 +98,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     return () => unsubscribe();
   }, []);
 
-  // Enhanced login function
+  // Login function
   const login = async (email: string, password: string) => {
     setLoading(true);
     try {
@@ -99,6 +107,42 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     } catch (error) {
       setLoading(false);
       throw error;
+    }
+  };
+  
+  // Test login function that bypasses Firebase authentication
+  const testLogin = async () => {
+    setLoading(true);
+    try {
+      // Create a mock test user
+      const testUser: UserProfile = {
+        id: 'test-user-id-123',
+        email: 'test@example.com',
+        name: 'Test User',
+        createdAt: new Date().toISOString(),
+        lastLogin: new Date().toISOString(),
+        subscription: {
+          status: 'active',
+          plan: 'Professional Plan',
+          endDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString() // 30 days from now
+        },
+        membershipInfo: {
+          joinDate: new Date().toISOString(),
+          status: 'active',
+          expiryDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
+          updatedAt: new Date().toISOString()
+        },
+        purchases: [] // Empty purchases array
+      };
+      
+      // Set the test user directly
+      setUser(testUser);
+      setIsLoggedIn(true);
+      console.log('Test user logged in:', testUser);
+    } catch (error) {
+      console.error('Error with test login:', error);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -177,7 +221,8 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         loading,
         recordUserPurchase,
         getUserPurchaseHistory,
-        updateMembership
+        updateMembership,
+        testLogin
       }}
     >
       {children}

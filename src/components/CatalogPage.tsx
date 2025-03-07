@@ -1,11 +1,34 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Header from './Header';
 import Footer from './Footer';
-import { Search, Filter, Grid, ShoppingCart, Loader } from 'lucide-react';
+import { Search, Filter, Grid, ShoppingCart, Loader, Tag } from 'lucide-react';
 import { useCart } from '../context/CartContext';
 import { useWooCommerce } from '../context/WooCommerceContext';
 import { toast } from 'react-hot-toast';
+import { Product, Category } from '../types';
+
+// Helper function to calculate the "original" price
+// This creates a fake original price that's 10-20% higher than the actual price
+const calculateOriginalPrice = (actualPrice: number): number => {
+  // Random discount between 10% and 20%
+  const discountPercentage = Math.floor(Math.random() * 11) + 10; // 10-20
+  
+  // Calculate the "original" price
+  const originalPrice = actualPrice * (100 / (100 - discountPercentage));
+  
+  // Round to 2 decimal places
+  return Math.round(originalPrice * 100) / 100;
+};
+
+// Helper function to format currency
+const formatCurrency = (amount: number): string => {
+  return new Intl.NumberFormat('en-US', {
+    style: 'currency',
+    currency: 'USD',
+    minimumFractionDigits: 2
+  }).format(amount);
+};
 
 const CatalogPage: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState('');
@@ -17,26 +40,44 @@ const CatalogPage: React.FC = () => {
   const { products, categories, loading, error } = useWooCommerce();
   
   // Filter products based on search and category
-  const filteredProducts = products.filter((product: any) => {
+  const filteredProducts = products.filter((product: Product) => {
     const matchesSearch = product.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
                         product.description.toLowerCase().includes(searchQuery.toLowerCase());
     
-    const matchesCategory = selectedCategory === 'all' || 
-                           (product.categories && product.categories.some((cat: {id: string}) => cat.id === selectedCategory));
+    const matchesCategory = selectedCategory === 'all' || product.category === selectedCategory;
     
     return matchesSearch && matchesCategory;
   });
+
+  // Create a mapping of product IDs to their "original" prices
+  // Using useMemo to ensure this is only recalculated when products change
+  const originalPrices = useMemo(() => {
+    const priceMap: Record<string, number> = {};
+    
+    products.forEach((product: Product) => {
+      priceMap[product.id] = calculateOriginalPrice(product.price);
+    });
+    
+    return priceMap;
+  }, [products]);
+  
+  // Calculate the discount percentage for a product
+  const getDiscountPercentage = (actualPrice: number, originalPrice: number): number => {
+    return Math.round(((originalPrice - actualPrice) / originalPrice) * 100);
+  };
 
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col">
       <Header />
       
       <main className="flex-grow container mx-auto px-4 py-8">
-        <div className="text-center mb-10">
-          <h1 className="text-4xl font-bold text-gray-800 mb-4">Resource Catalog</h1>
+        {/* Page Header - Updated to match MonthlyArticlesPage style */}
+        <div className="text-center mb-12 bg-white rounded-2xl p-8 shadow-sm">
+          <h1 className="text-4xl font-bold mb-4 bg-clip-text text-transparent bg-gradient-to-r from-[#2bcd82] to-[#25b975]">Resource Catalog</h1>
           <p className="text-lg text-gray-600 max-w-3xl mx-auto">
             Browse our collection of speech therapy resources, worksheets, and materials designed by experienced SLPs.
           </p>
+          <div className="mt-6 max-w-sm mx-auto h-1 bg-gradient-to-r from-[#2bcd82] to-transparent rounded-full"></div>
         </div>
         
         {/* Search and Filters */}
@@ -48,7 +89,7 @@ const CatalogPage: React.FC = () => {
                 placeholder="Search resources..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#2bcd82] focus:border-transparent"
+                className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#2bcd82] focus:border-[#2bcd82] transition-colors"
               />
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
             </div>
@@ -58,10 +99,10 @@ const CatalogPage: React.FC = () => {
               <select
                 value={selectedCategory}
                 onChange={(e) => setSelectedCategory(e.target.value)}
-                className="border border-gray-300 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-[#2bcd82] focus:border-transparent"
+                className="border border-gray-300 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-[#2bcd82] focus:border-[#2bcd82] transition-colors"
               >
                 <option value="all">All Categories</option>
-                {categories.map((category: any) => (
+                {categories.map((category: Category) => (
                   <option key={category.id} value={category.id}>{category.name}</option>
                 ))}
               </select>
@@ -118,7 +159,7 @@ const CatalogPage: React.FC = () => {
         {/* Grid View (Now the only view) */}
         {!loading && !error && filteredProducts.length > 0 && (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {filteredProducts.map((product: any) => (
+            {filteredProducts.map((product: Product) => (
               <div onClick={() => navigate(`/resource/${product.id}`)} key={product.id} className="bg-white cursor-pointer rounded-xl overflow-hidden shadow-sm hover:shadow-md transition-all duration-300 flex flex-col h-full border border-gray-100">
                 <div className="relative h-48 overflow-hidden bg-gray-100">
                   {product.thumbnail ? (
@@ -132,6 +173,12 @@ const CatalogPage: React.FC = () => {
                       <p className="text-gray-400">No image</p>
                     </div>
                   )}
+                  
+                  {/* Sale Tag */}
+                  <div className="absolute top-0 right-0 bg-[#fb6a69] text-white px-3 py-1 rounded-bl-lg text-sm font-bold flex items-center">
+                    <Tag className="w-4 h-4 mr-1" />
+                    {getDiscountPercentage(product.price, originalPrices[product.id])}% OFF
+                  </div>
                 </div>
                 
                 <div className="p-5 flex flex-col flex-grow">
@@ -144,7 +191,17 @@ const CatalogPage: React.FC = () => {
                   </p>
                   
                   <div className="mt-auto flex items-center justify-between">
-                    <span className="text-[#fb6a69] font-bold">${product.price.toFixed(2)}</span>
+                    <div className="flex flex-col">
+                      {/* Original Price (crossed out) */}
+                      <span className="text-gray-500 line-through text-sm">
+                        {formatCurrency(originalPrices[product.id])}
+                      </span>
+                      
+                      {/* Sale Price */}
+                      <span className="text-[#fb6a69] font-bold text-lg">
+                        {formatCurrency(product.price)}
+                      </span>
+                    </div>
                     
                     <div className="flex space-x-2">
                       <button 
@@ -152,10 +209,10 @@ const CatalogPage: React.FC = () => {
                         onClick={(e) => {
                           e.stopPropagation();
                           addToCart({
-                            id: product.id,
+                            id: parseInt(product.id, 10),
                             title: product.name,
                             description: product.description || '',
-                            category: product.categories?.[0]?.name || 'Uncategorized',
+                            category: 'Uncategorized', // Use a default category for cart display
                             imageUrl: product.thumbnail || '',
                             price: product.price.toString(),
                             quantity: 1

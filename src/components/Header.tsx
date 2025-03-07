@@ -74,15 +74,13 @@ const Header: React.FC = () => {
           </nav>
           
           {/* Mobile Menu Button */}
-          <div className="md:hidden flex items-center">
-            <button 
-              className="text-gray-700"
-              onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-              aria-label={mobileMenuOpen ? "Close menu" : "Open menu"}
-            >
-              {mobileMenuOpen ? <X className="h-6 w-6" /> : <Menu className="h-6 w-6" />}
-            </button>
-          </div>
+          <button 
+            className="md:hidden flex items-center text-gray-700 hover:text-[#2bcd82] transition-colors" 
+            onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+            aria-label={mobileMenuOpen ? "Close menu" : "Open menu"}
+          >
+            {mobileMenuOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
+          </button>
         </div>
         
         {/* Mobile Menu */}

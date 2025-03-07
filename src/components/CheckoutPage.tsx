@@ -5,7 +5,7 @@ import Footer from './Footer';
 import Button from './Button';
 // import StripePayment from './StripePayment';
 import PayPalPayment from './PayPalPayment';
-import { CreditCard, CircleDollarSign, ShieldCheck, Lock } from 'lucide-react';
+import { CreditCard, CircleDollarSign, ShieldCheck, Lock, Check } from 'lucide-react';
 import { useCart, CartItem } from '../context/CartContext';
 import { useAuth } from '../context/AuthContext';
 
@@ -17,6 +17,7 @@ const CheckoutPage: React.FC<CheckoutPageProps> = ({ productId }) => {
   const navigate = useNavigate();
   const location = useLocation();
   const { recordUserPurchase, isLoggedIn, user } = useAuth();
+  const { clearCart } = useCart();
   const [paymentMethod, setPaymentMethod] = useState<'stripe' | 'paypal' | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
   const [paymentComplete, setPaymentComplete] = useState(false);
@@ -39,12 +40,36 @@ const CheckoutPage: React.FC<CheckoutPageProps> = ({ productId }) => {
     email: ''
   });
 
+  // Billing address state
+  const [billingAddress, setBillingAddress] = useState({
+    firstName: '',
+    lastName: '',
+    organization: '',
+    streetAddress: '',
+    city: '',
+    postcode: '',
+    country: '',
+    state: '',
+    phone: '',
+    phoneCountryCode: '+61',
+    termsAgreed: false
+  });
+
   // Handle contact info change
   const handleContactInfoChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
     setContactInfo(prevInfo => ({
       ...prevInfo,
       [name]: value
+    }));
+  };
+
+  // Handle billing address change
+  const handleBillingAddressChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
+    const { name, value, type, checked } = e.target as HTMLInputElement;
+    setBillingAddress(prevAddress => ({
+      ...prevAddress,
+      [name]: type === 'checkbox' ? checked : value
     }));
   };
 
@@ -98,11 +123,11 @@ const CheckoutPage: React.FC<CheckoutPageProps> = ({ productId }) => {
     }
   ];
 
-  // Select plan based on URL parameter or default to the first plan
+  // Select plan based on URL parameter - but NO default if not specified
   const selectedPlan = planId 
     ? availablePlans.find(plan => plan.id === planId) 
-    : availablePlans[1]; // Default to Professional Plan
-
+    : undefined; // No default plan - only use if explicitly requested
+  
   // Determine if we should show plan or cart items
   const showCartItems = cartItems && cartItems.length > 0;
   
@@ -135,13 +160,28 @@ const CheckoutPage: React.FC<CheckoutPageProps> = ({ productId }) => {
     setIsProcessing(false);
     
     if (success && transactionId) {
+      // Capture cart items before setting payment complete (which might trigger UI changes)
+      const currentCartItems = [...cartItems]; 
+      
       setPaymentComplete(true);
       setPaymentId(transactionId);
       
       // Record purchase in Firebase if user is logged in
       if (isLoggedIn && user) {
         try {
-          let purchaseItems;
+          // Define type for purchase items
+          interface PurchaseItem {
+            id: number | string;
+            type: 'product' | 'plan';
+            name: string;
+            description?: string;
+            category?: string;
+            price: string;
+            quantity: number;
+            imageUrl?: string;
+          }
+          
+          let purchaseItems: PurchaseItem[] = [];
           
           // If buying a plan
           if (selectedPlan) {
@@ -150,53 +190,96 @@ const CheckoutPage: React.FC<CheckoutPageProps> = ({ productId }) => {
               type: 'plan',
               name: selectedPlan.name,
               price: (selectedPlan.amount / 100).toFixed(2),
-              quantity: 1
+              quantity: 1,
+              imageUrl: selectedPlan.imageUrl || ''
             }];
           } 
           // If checking out cart items
-          else if (cartItems.length > 0) {
-            purchaseItems = cartItems.map(item => ({
-              id: item.id,
-              type: 'product',
+          else if (currentCartItems.length > 0) {
+            purchaseItems = currentCartItems.map(item => ({
+              id: parseInt(item.id.toString()), // Ensure consistent ID format
+              type: 'product' as const,
               name: item.title,
-              description: item.description,
-              category: item.category,
-              price: item.price.replace('$', ''),
-              quantity: item.quantity,
-              imageUrl: item.imageUrl
+              description: item.description || '',
+              category: item.category || 'Resource',
+              price: item.price.replace(/[^\d.-]/g, ''), // Remove any currency symbols
+              quantity: item.quantity || 1,
+              imageUrl: item.imageUrl || ''
             }));
+            
+            // Add console log for debugging
+            console.log('Processing purchase items:', purchaseItems);
+            
+            // Clear cart after successfully creating the purchase items array
+            clearCart();
+          } else {
+            console.error('No items found in cart during payment completion');
           }
           
-          // Record the purchase
-          await recordUserPurchase({
+          // Record the purchase with standardized data format
+          const purchaseData = {
             items: purchaseItems,
             total: selectedPlan ? (selectedPlan.amount / 100).toFixed(2) : getTotalPrice().toFixed(2),
             transactionId,
             paymentMethod: paymentMethod || 'unknown',
-            purchaseDate: new Date().toISOString()
-          });
-          
-          // Clear cart after successful purchase
-          if (cartItems.length > 0) {
-            try {
-              const cart = useCart();
-              cart.clearCart();
-            } catch (error) {
-              console.error("Failed to clear cart after purchase:", error);
+            purchaseDate: new Date().toISOString(),
+            status: 'completed',
+            billingInfo: {
+              firstName: billingAddress.firstName || '',
+              lastName: billingAddress.lastName || '',
+              email: contactInfo.email || ''
             }
+          };
+          
+          // Add debug logging
+          console.log('Sending purchase data to Firebase:', purchaseData);
+          
+          // Use a try-catch specifically for the recordUserPurchase call
+          try {
+            const purchaseResult = await recordUserPurchase(purchaseData);
+            console.log('Purchase recorded successfully:', purchaseResult);
+          } catch (recordError) {
+            console.error('Failed to record purchase in Firebase:', recordError);
           }
+          
         } catch (error) {
-          console.error("Failed to record purchase:", error);
+          console.error("Failed to process purchase data:", error);
           // Still consider the purchase successful even if recording fails
         }
       }
       
       // Redirect to success page after a short delay
       setTimeout(() => {
+        // Build a proper items array for the success page state
+        let successItems: CartItem[] = [];
+        let purchaseType: 'cart_items' | 'plan' | 'unknown';
+        
+        if (currentCartItems.length > 0) {
+          successItems = currentCartItems;
+          purchaseType = 'cart_items';
+        } else if (selectedPlan) {
+          successItems = [{
+            id: parseInt(selectedPlan.id),
+            title: selectedPlan.name,
+            description: selectedPlan.description,
+            price: `$${(selectedPlan.amount / 100).toFixed(2)}`,
+            quantity: 1,
+            imageUrl: selectedPlan.imageUrl || '',
+            category: 'Subscription Plan'
+          }];
+          purchaseType = 'plan';
+        } else {
+          // Fallback - should never happen if validation is working
+          successItems = [];
+          purchaseType = 'unknown';
+        }
+        
         navigate('/payment-success', { 
           state: { 
             paymentId: transactionId,
-            productName: showCartItems ? 'Your Cart Items' : product.name 
+            amount: selectedPlan ? (selectedPlan.amount / 100).toFixed(2) : getTotalPrice().toFixed(2),
+            items: successItems,
+            purchaseType: purchaseType
           } 
         });
       }, 2000);
@@ -273,26 +356,68 @@ const CheckoutPage: React.FC<CheckoutPageProps> = ({ productId }) => {
   
   // Validate card form before submission
   const validateCardForm = (): boolean => {
+    let isValid = true;
     const errors: {
       number?: string;
       expiry?: string;
       cvc?: string;
     } = {};
     
-    if (cardNumber.replace(/\s+/g, '').length < 16) {
-      errors.number = 'Card number must be 16 digits';
+    // Validate card number
+    if (!cardNumber || cardNumber.replace(/\s/g, '').length < 16) {
+      errors.number = 'Please enter a valid card number';
+      isValid = false;
     }
     
-    if (cardExpiry.length < 5) {
-      errors.expiry = 'Invalid expiry date';
+    // Validate expiry date
+    if (!cardExpiry || cardExpiry.length < 5) {
+      errors.expiry = 'Please enter a valid expiry date';
+      isValid = false;
+    } else {
+      const [month, year] = cardExpiry.split('/');
+      const currentYear = new Date().getFullYear() % 100;
+      const currentMonth = new Date().getMonth() + 1;
+      
+      if (parseInt(year) < currentYear || (parseInt(year) === currentYear && parseInt(month) < currentMonth)) {
+        errors.expiry = 'Card expired';
+        isValid = false;
+      }
     }
     
-    if (cardCvc.length < 3) {
-      errors.cvc = 'CVC must be 3 digits';
+    // Validate CVC
+    if (!cardCvc || cardCvc.length < 3) {
+      errors.cvc = 'Please enter a valid security code';
+      isValid = false;
+    }
+    
+    // Validate required billing address fields
+    if (!billingAddress.firstName) {
+      alert('Please enter your first name');
+      return false;
+    }
+    
+    if (!billingAddress.lastName) {
+      alert('Please enter your last name');
+      return false;
+    }
+    
+    if (!billingAddress.streetAddress) {
+      alert('Please enter your street address');
+      return false;
+    }
+    
+    if (!billingAddress.country) {
+      alert('Please select your country');
+      return false;
+    }
+    
+    if (!billingAddress.termsAgreed) {
+      alert('You must agree to the Terms of Use');
+      return false;
     }
     
     setCardError(errors);
-    return Object.keys(errors).length === 0;
+    return isValid;
   };
   
   // Handle card payment submission
@@ -301,8 +426,26 @@ const CheckoutPage: React.FC<CheckoutPageProps> = ({ productId }) => {
       setIsProcessing(true);
       
       // In a real application, you would make a request to your payment processor here
+      // with both card details and billing address
       // For this demo, we'll simulate a successful payment after a short delay
       setTimeout(() => {
+        const paymentData = {
+          cardNumber: cardNumber.replace(/\s/g, ''),
+          cardExpiry,
+          billingAddress: {
+            firstName: billingAddress.firstName,
+            lastName: billingAddress.lastName,
+            organization: billingAddress.organization,
+            streetAddress: billingAddress.streetAddress,
+            city: billingAddress.city,
+            postcode: billingAddress.postcode,
+            country: billingAddress.country,
+            state: billingAddress.state,
+            phone: `${billingAddress.phoneCountryCode} ${billingAddress.phone}`
+          }
+        };
+        
+        console.log('Payment data:', paymentData);
         handlePaymentComplete(true, "card_" + Math.random().toString(36).substring(2, 15));
       }, 1500);
     }
@@ -354,6 +497,185 @@ const CheckoutPage: React.FC<CheckoutPageProps> = ({ productId }) => {
                     required
                   />
                   <p className="mt-1 text-xs text-gray-500">Your receipt and download links will be sent to this email</p>
+                </div>
+              </div>
+              
+              {/* Billing Address Section */}
+              <div className="bg-white rounded-lg shadow-sm p-6 mb-6">
+                <h2 className="text-xl font-semibold mb-4 pb-3 border-b border-gray-100">Billing Address</h2>
+                
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      First name <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      name="firstName"
+                      value={billingAddress.firstName}
+                      onChange={handleBillingAddressChange}
+                      className="w-full p-3 border border-gray-300 rounded-md focus:ring-1 focus:ring-[#2bcd82] focus:border-[#2bcd82] transition-colors"
+                      required
+                    />
+                  </div>
+                  
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Last name <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      name="lastName"
+                      value={billingAddress.lastName}
+                      onChange={handleBillingAddressChange}
+                      className="w-full p-3 border border-gray-300 rounded-md focus:ring-1 focus:ring-[#2bcd82] focus:border-[#2bcd82] transition-colors"
+                      required
+                    />
+                  </div>
+                </div>
+                
+                <div className="mb-4">
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Organization
+                  </label>
+                  <input
+                    type="text"
+                    name="organization"
+                    value={billingAddress.organization}
+                    onChange={handleBillingAddressChange}
+                    className="w-full p-3 border border-gray-300 rounded-md focus:ring-1 focus:ring-[#2bcd82] focus:border-[#2bcd82] transition-colors"
+                  />
+                </div>
+                
+                <div className="mb-4">
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Street address <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    name="streetAddress"
+                    value={billingAddress.streetAddress}
+                    onChange={handleBillingAddressChange}
+                    className="w-full p-3 border border-gray-300 rounded-md focus:ring-1 focus:ring-[#2bcd82] focus:border-[#2bcd82] transition-colors"
+                    required
+                  />
+                </div>
+                
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Town / City
+                    </label>
+                    <input
+                      type="text"
+                      name="city"
+                      value={billingAddress.city}
+                      onChange={handleBillingAddressChange}
+                      className="w-full p-3 border border-gray-300 rounded-md focus:ring-1 focus:ring-[#2bcd82] focus:border-[#2bcd82] transition-colors"
+                    />
+                  </div>
+                  
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Postcode / ZIP
+                    </label>
+                    <input
+                      type="text"
+                      name="postcode"
+                      value={billingAddress.postcode}
+                      onChange={handleBillingAddressChange}
+                      className="w-full p-3 border border-gray-300 rounded-md focus:ring-1 focus:ring-[#2bcd82] focus:border-[#2bcd82] transition-colors"
+                    />
+                  </div>
+                </div>
+                
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Country <span className="text-red-500">*</span>
+                    </label>
+                    <select
+                      name="country"
+                      value={billingAddress.country}
+                      onChange={handleBillingAddressChange}
+                      className="w-full p-3 border border-gray-300 rounded-md focus:ring-1 focus:ring-[#2bcd82] focus:border-[#2bcd82] transition-colors"
+                      required
+                    >
+                      <option value="">Select a country</option>
+                      <option value="AU">Australia</option>
+                      <option value="US">United States</option>
+                      <option value="GB">United Kingdom</option>
+                      <option value="CA">Canada</option>
+                      <option value="NZ">New Zealand</option>
+                    </select>
+                  </div>
+                  
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      State / County
+                    </label>
+                    <input
+                      type="text"
+                      name="state"
+                      value={billingAddress.state}
+                      onChange={handleBillingAddressChange}
+                      className="w-full p-3 border border-gray-300 rounded-md focus:ring-1 focus:ring-[#2bcd82] focus:border-[#2bcd82] transition-colors"
+                    />
+                  </div>
+                </div>
+                
+                <div className="mb-4">
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Phone
+                  </label>
+                  <div className="flex">
+                    <div className="w-20">
+                      <select
+                        name="phoneCountryCode"
+                        value={billingAddress.phoneCountryCode}
+                        onChange={handleBillingAddressChange}
+                        className="w-full p-3 border border-gray-300 rounded-l-md focus:ring-1 focus:ring-[#2bcd82] focus:border-[#2bcd82] transition-colors"
+                      >
+                        <option value="+61">🇦🇺 +61</option>
+                        <option value="+1">🇺🇸 +1</option>
+                        <option value="+44">🇬🇧 +44</option>
+                        <option value="+64">🇳🇿 +64</option>
+                        <option value="+1">🇨🇦 +1</option>
+                      </select>
+                    </div>
+                    <input
+                      type="tel"
+                      name="phone"
+                      value={billingAddress.phone}
+                      onChange={handleBillingAddressChange}
+                      className="flex-1 p-3 border border-gray-300 border-l-0 rounded-r-md focus:ring-1 focus:ring-[#2bcd82] focus:border-[#2bcd82] transition-colors"
+                      placeholder="Phone number"
+                    />
+                  </div>
+                </div>
+                
+                <div className="mb-4">
+                  <div className="flex items-start">
+                    <div className="flex items-center h-5">
+                      <input
+                        id="terms"
+                        name="termsAgreed"
+                        type="checkbox"
+                        checked={billingAddress.termsAgreed}
+                        onChange={handleBillingAddressChange}
+                        className="w-4 h-4 text-[#2bcd82] border-gray-300 rounded focus:ring-[#2bcd82]"
+                        required
+                      />
+                    </div>
+                    <div className="ml-3 text-sm">
+                      <label htmlFor="terms" className="font-medium text-gray-700">
+                        I have read and agree to the <a href="/terms" className="text-[#2bcd82] hover:underline">Terms of Use</a> <span className="text-red-500">*</span>
+                      </label>
+                      <p className="text-gray-500 mt-1">
+                        and acknowledge that all resources are licensed for use by a single user only and are not to be shared or distributed. For multi-user licensing options, <a href="/contact" className="text-[#2bcd82] hover:underline">click here</a>
+                      </p>
+                    </div>
+                  </div>
                 </div>
               </div>
               

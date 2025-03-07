@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { LockKeyhole, Mail, User, Loader2 } from 'lucide-react';
+import { LockKeyhole, Mail, User, Loader2, ZapIcon } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 
 const SignIn: React.FC = () => {
@@ -11,7 +11,7 @@ const SignIn: React.FC = () => {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
-  const { isLoggedIn, login, register } = useAuth();
+  const { isLoggedIn, login, register, testLogin } = useAuth();
 
   // Redirect if already logged in
   React.useEffect(() => {
@@ -43,6 +43,20 @@ const SignIn: React.FC = () => {
       navigate('/');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An error occurred');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Add instant test login function
+  const handleTestSignIn = async () => {
+    setLoading(true);
+    try {
+      // Use the testLogin function that bypasses authentication
+      await testLogin();
+      navigate('/');
+    } catch (err) {
+      setError('Test login failed: ' + (err instanceof Error ? err.message : 'Unknown error'));
     } finally {
       setLoading(false);
     }
@@ -129,16 +143,25 @@ const SignIn: React.FC = () => {
           )}
         </div>
 
-        <div>
+        <div className="mt-6 flex flex-col space-y-4">
           <button
             type="submit"
             disabled={loading}
-            className="w-full flex justify-center items-center py-3 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-[#2bcd82] hover:bg-[#25b975] focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[#2bcd82] transition-colors"
+            className="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-[#2bcd82] hover:bg-[#25b975] focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[#2bcd82] disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            {loading ? (
-              <Loader2 className="h-5 w-5 animate-spin mr-2" />
-            ) : null}
+            {loading ? <Loader2 className="h-5 w-5 animate-spin mr-2" /> : null}
             {isLogin ? 'Sign In' : 'Create Account'}
+          </button>
+          
+          <button
+            type="button"
+            onClick={handleTestSignIn}
+            className="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" />
+            </svg>
+            Instant Test Sign In
           </button>
         </div>
       </form>

@@ -3,39 +3,21 @@ import { Link } from 'react-router-dom';
 import { Mail, MapPin, Facebook, Instagram, Youtube } from 'lucide-react';
 import Logo from '../assets/images/cicle-logo.png';
 import { useAuth } from '../context/AuthContext';
+import LeadCapture from './LeadCapture';
+
 
 const Footer: React.FC = () => {
   const { isLoggedIn } = useAuth();
 
   return (
     <footer className="bg-gray-800 text-white">
-      {/* Newsletter Section */}
-      <div className="bg-[#2bcd82] py-12">
-        <div className="container mx-auto px-4">
-          <div className="flex flex-col md:flex-row items-center justify-between">
-            <div className="mb-6 md:mb-0 md:w-1/2">
-              <h3 className="text-2xl font-bold text-white mb-2">Join Our Newsletter</h3>
-              <p className="text-white/80">Get the latest resources, speech therapy tips, and exclusive offers</p>
-            </div>
-            <div className="w-full md:w-1/2 md:pl-6">
-              <form className="flex flex-col sm:flex-row gap-2">
-                <input 
-                  type="email" 
-                  placeholder="Your email address" 
-                  className="px-4 py-3 rounded-lg flex-grow bg-white text-black focus:outline-none focus:ring-2 focus:ring-white" 
-                  required
-                />
-                <button 
-                  type="submit" 
-                  className="bg-[#fb6a69] hover:bg-[#e05958] text-white font-medium px-6 py-3 rounded-lg transition-colors"
-                >
-                  Subscribe
-                </button>
-              </form>
-            </div>
-          </div>
-        </div>
-      </div>
+      {/* Lead Capture Section */}
+      <LeadCapture 
+        onSubmit={(name, email) => {
+          // In a real app, you would submit this data to your backend
+          console.log('Lead capture form submitted:', { name, email });
+        }}
+      />
 
       {/* Main Footer */}
       <div className="py-12">

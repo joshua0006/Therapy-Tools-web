@@ -20,6 +20,8 @@ import MonthlyArticlesPage from './components/MonthlyArticlesPage'
 import PrivacyPolicyPage from './components/PrivacyPolicyPage'
 import UserPurchasesPage from './components/UserPurchasesPage'
 import SignIn from './components/SignIn'
+import ApiTestPage from './components/ApiTestPage'
+import TermsOfUsePage from './components/TermsOfUsePage'
 
 // Error boundary component to catch errors
 class ErrorBoundaryComponent extends React.Component<
@@ -103,7 +105,9 @@ const App: React.FC = () => {
                     <Route path="/events-news" element={<EventsNewsPage />} />
                     <Route path="/monthly-articles" element={<MonthlyArticlesPage />} />
                     <Route path="/privacy" element={<PrivacyPolicyPage />} />
+                    <Route path="/terms" element={<TermsOfUsePage />} />
                     <Route path="/signin" element={<SignIn />} />
+                    <Route path="/api-test" element={<ApiTestPage />} />
                   </Routes>
                 </Suspense>
               </Router>
