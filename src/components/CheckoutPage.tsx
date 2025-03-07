@@ -5,7 +5,7 @@ import Footer from './Footer';
 import Button from './Button';
 // import StripePayment from './StripePayment';
 import PayPalPayment from './PayPalPayment';
-import { CreditCard, CircleDollarSign, ShieldCheck, Lock, Check } from 'lucide-react';
+import { CreditCard, CircleDollarSign, ShieldCheck, Lock } from 'lucide-react';
 import { useCart, CartItem } from '../context/CartContext';
 import { useAuth } from '../context/AuthContext';
 

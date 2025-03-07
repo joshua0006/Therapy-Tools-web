@@ -350,7 +350,7 @@ const ResourceDetailPage: React.FC = () => {
                 
                 <div className="bg-[#f0f9f4] border border-[#c8ebda] p-6 rounded-xl mb-8">
                   <h3 className="text-xl font-bold text-gray-800 mb-3">MORE RESOURCES</h3>
-                  <p className="mb-4">GET OUR 2-ELEMENT BUNDLE featuring "sl", "fl", "fr", "thr" and "shr" <a href="#" className="text-[#2bcd82] font-medium hover:underline">here</a></p>
+                  <p className="mb-4">GET OUR 2-ELEMENT BUNDLE featuring "sl", "fl", "fr", "thr" and "shr" <a href="/catalog" className="text-[#2bcd82] font-medium hover:underline">here</a></p>
                   <p className="mb-4">Do you need FREE 100 Trials for Speech no-prep worksheets? Sign up for my newsletter to get access to my Freebie Library of goodies that are aimed at your speech sound caseload.</p>
                 </div>
                 
@@ -359,29 +359,7 @@ const ResourceDetailPage: React.FC = () => {
                   Rebecca Reinking is an SLP who works privately with children who have speech sound disorders. She has a particular interest in phonological interventions and strives to connect and collaborate with speech scientists to bridge the gap between research and clinical practice.
                 </p>
                 
-                <div className="flex flex-col md:flex-row flex-wrap gap-4 mb-6">
-                  <a href="#" className="flex items-center text-gray-700 hover:text-[#2bcd82] transition-colors">
-                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-5 h-5 mr-2">
-                      <rect width="20" height="20" x="2" y="2" rx="5" ry="5"></rect>
-                      <path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z"></path>
-                      <line x1="17.5" x2="17.51" y1="6.5" y2="6.5"></line>
-                    </svg>
-                    Follow our 100,000-strong Instagram account: @adventuresinspeechpathology
-                  </a>
-                  <a href="#" className="flex items-center text-gray-700 hover:text-[#2bcd82] transition-colors">
-                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-5 h-5 mr-2">
-                      <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"></path>
-                    </svg>
-                    Contact our support team: support@adventuresinspeechpathology.com
-                  </a>
-                  <a href="#" className="flex items-center text-gray-700 hover:text-[#2bcd82] transition-colors">
-                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-5 h-5 mr-2">
-                      <path d="M2.5 17a24.12 24.12 0 0 1 0-10 2 2 0 0 1 1.4-1.4 49.56 49.56 0 0 1 16.2 0A2 2 0 0 1 21.5 7a24.12 24.12 0 0 1 0 10 2 2 0 0 1-1.4 1.4 49.55 49.55 0 0 1-16.2 0A2 2 0 0 1 2.5 17"></path>
-                      <path d="m10 15 5-3-5-3z"></path>
-                    </svg>
-                    Watch therapy clips on YouTube: youtube.com/c/AdventuresinSpeechPathology
-                  </a>
-                </div>
+            
                 
                 <p className="text-gray-600 leading-relaxed mt-4">
                   This resource is perfect for speech-language pathologists working with clients 

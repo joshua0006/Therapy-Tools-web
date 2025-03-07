@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { LockKeyhole, Mail, User, Loader2, ZapIcon } from 'lucide-react';
+import { LockKeyhole, Mail, User, Loader2 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 
 const SignIn: React.FC = () => {

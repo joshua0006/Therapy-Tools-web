@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import Header from './Header';
 import Footer from './Footer';
-import { fetchEvents, fetchNews, fetchEventDetails, Event, News } from '../lib/woocommerce/events-news';
+import {  fetchEventDetails, Event } from '../lib/woocommerce/events-news';
 import { useEventsNews } from '../context/EventsNewsContext';
 import { useWooCommerce } from '../context/WooCommerceContext';
 

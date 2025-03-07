@@ -160,7 +160,7 @@ const CatalogPage: React.FC = () => {
         {!loading && !error && filteredProducts.length > 0 && (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {filteredProducts.map((product: Product) => (
-              <div onClick={() => navigate(`/resource/${product.id}`)} key={product.id} className="bg-white cursor-pointer rounded-xl overflow-hidden shadow-sm hover:shadow-md transition-all duration-300 flex flex-col h-full border border-gray-100">
+              <div onClick={() => navigate(`/catalog/${product.id}`)} key={product.id} className="bg-white cursor-pointer rounded-xl overflow-hidden shadow-sm hover:shadow-md transition-all duration-300 flex flex-col h-full border border-gray-100">
                 <div className="relative h-48 overflow-hidden bg-gray-100">
                   {product.thumbnail ? (
                     <img 

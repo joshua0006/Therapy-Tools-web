@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import Header from './Header';
 import Footer from './Footer';
-import { Calendar, Clock, MapPin, ExternalLink, Bell, Search, ArrowLeft, Users, Phone, Mail, UserCircle, PhoneCall, CalendarClock, Tag, AlertCircle, Languages, CircleDollarSign, Lock, User } from 'lucide-react';
+import { Calendar, Clock, MapPin, ExternalLink, Bell, Search, ArrowLeft, Users, Phone, Mail,  PhoneCall,  AlertCircle, User } from 'lucide-react';
 import { useEventsNews } from '../context/EventsNewsContext';
 import { formatDate } from '../utils/formatters';
 import { useLocation, useNavigate } from 'react-router-dom';
