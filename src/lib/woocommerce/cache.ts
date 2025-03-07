@@ -124,7 +124,7 @@ export function clearCache(type?: 'products' | 'categories' | 'events' | 'news' 
 export async function prefetchCriticalData(): Promise<void> {
   try {
     // Import fetchers dynamically to avoid circular dependencies
-    const { fetchProducts, fetchCategories } = await import('./products');
+    const { fetchCategories } = await import('./products');
     const { fetchEvents, fetchNews } = await import('./events-news');
     
     // Start all fetches in parallel

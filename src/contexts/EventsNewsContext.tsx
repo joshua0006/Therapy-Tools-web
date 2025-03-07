@@ -1,10 +1,10 @@
 import React, { createContext, useState, useEffect, useContext, ReactNode } from 'react';
-import { fetchEvents, fetchNews, Event, NewsItem } from '../lib/woocommerce/events-news';
+import { fetchEvents, fetchNews, Event, News } from '../lib/woocommerce/events-news';
 import { getCached, setCache } from '../lib/woocommerce/cache';
 
 interface EventsNewsContextType {
   events: Event[];
-  news: NewsItem[];
+  news: News[];
   loading: boolean;
   error: string | null;
   refreshEvents: () => Promise<void>;
@@ -19,7 +19,7 @@ interface EventsNewsProviderProps {
 
 export const EventsNewsProvider: React.FC<EventsNewsProviderProps> = ({ children }) => {
   const [events, setEvents] = useState<Event[]>([]);
-  const [news, setNews] = useState<NewsItem[]>([]);
+  const [news, setNews] = useState<News[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
 

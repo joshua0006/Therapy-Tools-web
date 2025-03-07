@@ -54,7 +54,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           
           if (!userProfile) {
             // Create new user profile with required fields
-            userProfile = {
+            const newUserProfile: UserProfile = {
               id: firebaseUser.uid,
               email: firebaseUser.email || '',
               name: firebaseUser.displayName || 'User',
@@ -68,13 +68,13 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
               purchases: [],
               membershipInfo: {
                 joinDate: new Date().toISOString(),
-                status: 'free',
-                expiryDate: null
-              }
+                status: 'inactive',
+                expiryDate: null,
+              },
             };
             
-            // Save the complete profile
-            await saveUserProfile(firebaseUser.uid, userProfile);
+            // Save the new user profile
+            userProfile = await saveUserProfile(firebaseUser.uid, newUserProfile);
           } else {
             // Update last login timestamp while preserving existing data
             await saveUserProfile(firebaseUser.uid, {
