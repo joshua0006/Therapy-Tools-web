@@ -29,6 +29,41 @@ const db = getFirestore(app);
 const usersCollection = collection(db, 'users');
 const purchasesCollection = collection(db, 'purchases');
 
+// Add BillingAddress interface
+interface BillingAddress {
+  firstName: string;
+  lastName: string;
+  organization: string;
+  streetAddress: string;
+  city: string;
+  state: string;
+  postcode: string;
+  country: string;
+  phone: string;
+  phoneCountryCode: string;
+  isDefault?: boolean;
+  createdAt: Date;
+  updatedAt?: Date;
+}
+
+// Add ShippingAddress interface
+interface ShippingAddress {
+  firstName: string;
+  lastName: string;
+  company?: string;
+  streetAddress: string;
+  apartment?: string;
+  city: string;
+  state: string;
+  postcode: string;
+  country: string;
+  phone: string;
+  phoneCountryCode: string;
+  isDefault?: boolean;
+  createdAt: Date;
+  updatedAt?: Date;
+}
+
 /**
  * Save user profile data to Firestore
  */
@@ -171,4 +206,202 @@ export async function getPurchase(purchaseId: string) {
   }
   
   return null;
+}
+
+/**
+ * Save or update user's billing information
+ */
+export async function saveBillingInformation(userId: string, billingData: any, isDefault: boolean = false) {
+  console.log('Saving billing information for user:', userId);
+  
+  try {
+    const userRef = doc(usersCollection, userId);
+    const userSnap = await getDoc(userRef);
+    
+    if (userSnap.exists()) {
+      const userData = userSnap.data();
+      
+      // Initialize billingAddresses array if it doesn't exist
+      const billingAddresses: BillingAddress[] = userData.billingAddresses || [];
+      
+      // Clean billing data before storing
+      const cleanBillingData: BillingAddress = {
+        firstName: billingData.firstName || '',
+        lastName: billingData.lastName || '',
+        organization: billingData.organization || '',
+        streetAddress: billingData.streetAddress || '',
+        city: billingData.city || '',
+        state: billingData.state || '',
+        postcode: billingData.postcode || '',
+        country: billingData.country || '',
+        phone: billingData.phone || '',
+        phoneCountryCode: billingData.phoneCountryCode || '',
+        createdAt: new Date()
+      };
+      
+      // If this is marked as the default address, remove default flag from other addresses
+      if (isDefault) {
+        billingAddresses.forEach((address: BillingAddress) => {
+          if (address.isDefault) {
+            address.isDefault = false;
+          }
+        });
+        
+        cleanBillingData.isDefault = true;
+      }
+      
+      // Check if we need to update an existing address or add a new one
+      const existingAddressIndex = billingAddresses.findIndex(
+        (address: BillingAddress) => 
+          address.streetAddress === cleanBillingData.streetAddress &&
+          address.city === cleanBillingData.city &&
+          address.postcode === cleanBillingData.postcode
+      );
+      
+      if (existingAddressIndex >= 0) {
+        // Update existing address
+        billingAddresses[existingAddressIndex] = {
+          ...billingAddresses[existingAddressIndex],
+          ...cleanBillingData,
+          updatedAt: new Date()
+        };
+      } else {
+        // Add new address
+        billingAddresses.push(cleanBillingData);
+      }
+      
+      // Update user profile with billing addresses
+      await updateDoc(userRef, {
+        billingAddresses,
+        updatedAt: new Date()
+      });
+      
+      console.log('Billing information saved successfully');
+      return billingAddresses;
+    } else {
+      console.error('User not found when saving billing information');
+      return null;
+    }
+  } catch (error) {
+    console.error('Error saving billing information:', error);
+    throw error;
+  }
+}
+
+/**
+ * Get user's billing information
+ */
+export async function getUserBillingInformation(userId: string): Promise<BillingAddress[]> {
+  try {
+    const userProfile = await getUserProfile(userId);
+    
+    if (userProfile && userProfile.billingAddresses) {
+      return userProfile.billingAddresses as BillingAddress[];
+    }
+    
+    return [];
+  } catch (error) {
+    console.error('Error retrieving billing information:', error);
+    return [];
+  }
+}
+
+// Add saveShippingInformation function
+/**
+ * Save or update user's shipping information
+ */
+export async function saveShippingInformation(userId: string, shippingData: any, isDefault: boolean = false) {
+  console.log('Saving shipping information for user:', userId);
+  
+  try {
+    const userRef = doc(usersCollection, userId);
+    const userSnap = await getDoc(userRef);
+    
+    if (userSnap.exists()) {
+      const userData = userSnap.data();
+      
+      // Initialize shippingAddresses array if it doesn't exist
+      const shippingAddresses: ShippingAddress[] = userData.shippingAddresses || [];
+      
+      // Clean shipping data before storing
+      const cleanShippingData: ShippingAddress = {
+        firstName: shippingData.firstName || '',
+        lastName: shippingData.lastName || '',
+        company: shippingData.company || '',
+        streetAddress: shippingData.streetAddress || '',
+        apartment: shippingData.apartment || '',
+        city: shippingData.city || '',
+        state: shippingData.state || '',
+        postcode: shippingData.postcode || '',
+        country: shippingData.country || '',
+        phone: shippingData.phone || '',
+        phoneCountryCode: shippingData.phoneCountryCode || '',
+        createdAt: new Date()
+      };
+      
+      // If this is marked as the default address, remove default flag from other addresses
+      if (isDefault) {
+        shippingAddresses.forEach((address: ShippingAddress) => {
+          if (address.isDefault) {
+            address.isDefault = false;
+          }
+        });
+        
+        cleanShippingData.isDefault = true;
+      }
+      
+      // Check if we need to update an existing address or add a new one
+      const existingAddressIndex = shippingAddresses.findIndex(
+        (address: ShippingAddress) => 
+          address.streetAddress === cleanShippingData.streetAddress &&
+          address.city === cleanShippingData.city &&
+          address.postcode === cleanShippingData.postcode
+      );
+      
+      if (existingAddressIndex >= 0) {
+        // Update existing address
+        shippingAddresses[existingAddressIndex] = {
+          ...shippingAddresses[existingAddressIndex],
+          ...cleanShippingData,
+          updatedAt: new Date()
+        };
+      } else {
+        // Add new address
+        shippingAddresses.push(cleanShippingData);
+      }
+      
+      // Update user profile with shipping addresses
+      await updateDoc(userRef, {
+        shippingAddresses,
+        updatedAt: new Date()
+      });
+      
+      console.log('Shipping information saved successfully');
+      return shippingAddresses;
+    } else {
+      console.error('User not found when saving shipping information');
+      return null;
+    }
+  } catch (error) {
+    console.error('Error saving shipping information:', error);
+    throw error;
+  }
+}
+
+/**
+ * Get user's shipping information
+ */
+export async function getUserShippingInformation(userId: string): Promise<ShippingAddress[]> {
+  try {
+    const userProfile = await getUserProfile(userId);
+    
+    if (userProfile && userProfile.shippingAddresses) {
+      return userProfile.shippingAddresses as ShippingAddress[];
+    }
+    
+    return [];
+  } catch (error) {
+    console.error('Error retrieving shipping information:', error);
+    return [];
+  }
 } 

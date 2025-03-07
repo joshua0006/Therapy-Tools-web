@@ -1,7 +1,7 @@
 import React, { createContext, useState, useContext, ReactNode, useEffect } from 'react';
 import { auth, loginWithEmail, registerWithEmail, logoutUser, updateUserMembership } from '../lib/firebase/auth';
 import { onAuthStateChanged, User as FirebaseUser } from 'firebase/auth';
-import { saveUserProfile, getUserProfile, recordPurchase, getUserPurchases } from '../lib/firebase/firestore';
+import { saveUserProfile, getUserProfile, recordPurchase, getUserPurchases, saveBillingInformation, getUserBillingInformation, saveShippingInformation, getUserShippingInformation } from '../lib/firebase/firestore';
 
 // Define user types
 export interface UserProfile {
@@ -22,19 +22,70 @@ export interface UserProfile {
     expiryDate: string | null;
     updatedAt?: string;
   };
+  phone?: string;
+  street?: string;
+  city?: string;
+  state?: string;
+  zip?: string;
+  country?: string;
+  billingAddresses?: BillingAddress[];
+  shippingAddresses?: ShippingAddress[];
+}
+
+export interface BillingAddress {
+  firstName: string;
+  lastName: string;
+  organization: string;
+  streetAddress: string;
+  city: string;
+  state: string;
+  postcode: string;
+  country: string;
+  phone: string;
+  phoneCountryCode: string;
+  isDefault?: boolean;
+  createdAt: Date;
+  updatedAt?: Date;
+}
+
+export interface ShippingAddress {
+  firstName: string;
+  lastName: string;
+  company?: string;
+  organization?: string;
+  streetAddress: string;
+  apartment?: string;
+  city: string;
+  state: string;
+  postcode: string;
+  country: string;
+  phone: string;
+  phoneCountryCode: string;
+  isDefault?: boolean;
+  createdAt: Date;
+  updatedAt?: Date;
 }
 
 interface AuthContextType {
   isLoggedIn: boolean;
   user: UserProfile | null;
   login: (email: string, password: string) => Promise<void>;
-  register: (email: string, password: string, name: string) => Promise<void>;
+  register: (
+    email: string, 
+    password: string, 
+    name: string, 
+    shippingAddress?: Partial<ShippingAddress>
+  ) => Promise<void>;
   logout: () => Promise<void>;
   loading: boolean;
   recordUserPurchase: (purchaseData: any) => Promise<any>;
   getUserPurchaseHistory: () => Promise<any[]>;
   updateMembership: (membershipData: any) => Promise<void>;
   testLogin: () => Promise<void>;
+  saveBillingInfo: (billingData: any, isDefault: boolean) => Promise<any>;
+  getBillingInfo: () => Promise<BillingAddress[]>;
+  saveShippingInfo: (shippingData: any, isDefault: boolean) => Promise<any>;
+  getShippingInfo: () => Promise<ShippingAddress[]>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -147,11 +198,42 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   };
 
   // Register function
-  const register = async (email: string, password: string, name: string) => {
+  const register = async (
+    email: string, 
+    password: string, 
+    name: string, 
+    shippingAddress?: Partial<ShippingAddress>
+  ) => {
     setLoading(true);
     try {
-      await registerWithEmail(email, password, name);
-      // Auth state change listener will handle the rest
+      // Register with Firebase
+      const userCredential = await registerWithEmail(email, password);
+      const userId = userCredential.user.uid;
+      
+      // Create user profile object
+      const now = new Date().toISOString();
+      const userProfile: UserProfile = {
+        id: userId,
+        email,
+        name,
+        createdAt: now,
+        lastLogin: now
+      };
+      
+      // Add shipping address if provided
+      if (shippingAddress && Object.keys(shippingAddress).length > 0) {
+        const shippingData = {
+          ...shippingAddress,
+          isDefault: true,
+          createdAt: new Date()
+        };
+        
+        userProfile.shippingAddresses = [shippingData as ShippingAddress];
+      }
+      
+      // Save profile to Firestore
+      await saveUserProfile(userId, userProfile);
+      
     } catch (error) {
       setLoading(false);
       throw error;
@@ -210,6 +292,87 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }
   };
 
+  // Add the new saveBillingInfo method
+  const saveBillingInfo = async (billingData: any, isDefault: boolean = false) => {
+    if (!user) {
+      throw new Error('User must be logged in to save billing information');
+    }
+
+    try {
+      const billingAddresses = await saveBillingInformation(user.id, billingData, isDefault);
+      
+      // Update the local user object with the new billing addresses
+      setUser(prevUser => {
+        if (prevUser) {
+          return {
+            ...prevUser,
+            billingAddresses: billingAddresses || [] // Ensure it's never null
+          };
+        }
+        return prevUser;
+      });
+      
+      return billingAddresses;
+    } catch (error) {
+      console.error('Error saving billing information:', error);
+      throw error;
+    }
+  };
+
+  // Add the new getBillingInfo method
+  const getBillingInfo = async () => {
+    if (!user) {
+      throw new Error('User must be logged in to get billing information');
+    }
+
+    try {
+      return await getUserBillingInformation(user.id);
+    } catch (error) {
+      console.error('Error getting billing information:', error);
+      return [];
+    }
+  };
+
+  // Add methods for managing shipping addresses
+  const saveShippingInfo = async (shippingData: any, isDefault: boolean = false) => {
+    if (!user) {
+      throw new Error('User must be logged in to save shipping information');
+    }
+
+    try {
+      const shippingAddresses = await saveShippingInformation(user.id, shippingData, isDefault);
+      
+      // Update the local user object with the new shipping addresses
+      setUser(prevUser => {
+        if (prevUser) {
+          return {
+            ...prevUser,
+            shippingAddresses: shippingAddresses || [] // Ensure it's never null
+          };
+        }
+        return prevUser;
+      });
+      
+      return shippingAddresses;
+    } catch (error) {
+      console.error('Error saving shipping information:', error);
+      throw error;
+    }
+  };
+
+  const getShippingInfo = async () => {
+    if (!user) {
+      throw new Error('User must be logged in to get shipping information');
+    }
+
+    try {
+      return await getUserShippingInformation(user.id);
+    } catch (error) {
+      console.error('Error getting shipping information:', error);
+      return [];
+    }
+  };
+
   return (
     <AuthContext.Provider 
       value={{ 
@@ -222,7 +385,11 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         recordUserPurchase,
         getUserPurchaseHistory,
         updateMembership,
-        testLogin
+        testLogin,
+        saveBillingInfo,
+        getBillingInfo,
+        saveShippingInfo,
+        getShippingInfo
       }}
     >
       {children}

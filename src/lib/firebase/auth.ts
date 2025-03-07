@@ -195,48 +195,22 @@ export async function registerWithEmail(email: string, password: string, name: s
     });
     console.log('Display name set for user');
     
-    // Create a user profile in Firestore
-    const userProfile = {
-      id: result.user.uid,
-      email: result.user.email || '',
-      name: name.trim(),
-      createdAt: new Date().toISOString(),
-      lastLogin: new Date().toISOString(),
-      subscription: {
-        status: 'inactive',
-        plan: 'none',
-        endDate: new Date().toISOString(),
-      },
-      purchases: [],
-      membershipInfo: {
-        joinDate: new Date().toISOString(),
-        status: 'free',
-        expiryDate: null
-      }
-    };
-    
-    // Save to Firestore
-    console.log('Saving new user profile to Firestore');
-    await _saveUserProfile(result.user.uid, userProfile);
-    console.log('User profile saved successfully');
-    
-    return { user: userProfile };
+    // Return the user credential (the profile creation will happen in AuthContext)
+    return result;
   } catch (error: any) {
-    console.error('Registration error:', error);
+    console.error('Registration error:', error.message);
     
-    // Handle specific Firebase auth errors
+    // Translate Firebase auth errors to user-friendly messages
     if (error.code === 'auth/email-already-in-use') {
-      throw new Error('This email is already in use. Try logging in instead.');
+      throw new Error('This email is already registered');
     } else if (error.code === 'auth/invalid-email') {
-      throw new Error('Please provide a valid email address.');
+      throw new Error('Please provide a valid email address');
     } else if (error.code === 'auth/weak-password') {
-      throw new Error('Password is too weak. It must be at least 6 characters.');
+      throw new Error('Password must be at least 6 characters');
     } else if (error.code === 'auth/network-request-failed') {
-      throw new Error('Network error. Please check your internet connection.');
-    } else if (error.message) {
-      throw new Error(error.message);
+      throw new Error('Network error. Please check your internet connection');
     } else {
-      throw new Error('Failed to register. Please try again later.');
+      throw error;
     }
   }
 }

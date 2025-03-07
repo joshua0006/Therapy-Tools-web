@@ -6,6 +6,7 @@ import Logo from '../assets/images/cicle-logo.png';
 
 const Header: React.FC = () => {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [userDropdownOpen, setUserDropdownOpen] = useState(false);
   const { isLoggedIn, logout } = useAuth();
   const navigate = useNavigate();
   
@@ -55,12 +56,36 @@ const Header: React.FC = () => {
             )}
             
             {isLoggedIn ? (
-              <button 
-                className="bg-[#fb6a69] hover:bg-[#e05958] text-white px-5 py-2 rounded-full font-medium transition-colors flex items-center"
-                onClick={handleLogout}
-              >
-                <User className="w-5 h-5 mr-2" /> Log Out
-              </button>
+              <div className="relative">
+                <button 
+                  className="flex items-center text-gray-700 hover:text-[#2bcd82] transition-colors p-2 rounded-full hover:bg-gray-100"
+                  onClick={() => setUserDropdownOpen(!userDropdownOpen)}
+                  aria-expanded={userDropdownOpen}
+                >
+                  <User className="w-5 h-5" />
+                </button>
+                
+                {userDropdownOpen && (
+                  <div className="absolute right-0 mt-2 w-48 bg-white rounded-md shadow-lg py-1 z-50 border border-gray-200">
+                    <Link 
+                      to="/settings" 
+                      className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+                      onClick={() => setUserDropdownOpen(false)}
+                    >
+                      Account Settings
+                    </Link>
+                    <button 
+                      className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+                      onClick={() => {
+                        handleLogout();
+                        setUserDropdownOpen(false);
+                      }}
+                    >
+                      Logout
+                    </button>
+                  </div>
+                )}
+              </div>
             ) : (
               <div className="flex items-center space-x-4">
                 <Link 
@@ -129,15 +154,24 @@ const Header: React.FC = () => {
               )}
               
               {isLoggedIn ? (
-                <button 
-                  className="text-gray-700 hover:text-[#2bcd82] font-medium transition-colors flex items-center text-left"
-                  onClick={() => {
-                    handleLogout();
-                    setMobileMenuOpen(false);
-                  }}
-                >
-                  <User className="w-5 h-5 mr-2" /> Log Out
-                </button>
+                <>
+                  <Link 
+                    to="/account-settings"
+                    className="text-gray-700 hover:text-[#2bcd82] font-medium transition-colors flex items-center text-left"
+                    onClick={() => setMobileMenuOpen(false)}
+                  >
+                    <User className="w-5 h-5 mr-2" /> Account Settings
+                  </Link>
+                  <button 
+                    className="text-gray-700 hover:text-[#2bcd82] font-medium transition-colors flex items-center text-left"
+                    onClick={() => {
+                      handleLogout();
+                      setMobileMenuOpen(false);
+                    }}
+                  >
+                    <LogIn className="w-5 h-5 mr-2" rotate={180} /> Logout
+                  </button>
+                </>
               ) : (
                 <Link 
                   to="/signin"

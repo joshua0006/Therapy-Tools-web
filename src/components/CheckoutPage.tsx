@@ -1,13 +1,13 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import Header from './Header';
 import Footer from './Footer';
 import Button from './Button';
 // import StripePayment from './StripePayment';
 import PayPalPayment from './PayPalPayment';
-import { CreditCard, CircleDollarSign, ShieldCheck, Lock } from 'lucide-react';
+import { CreditCard, CircleDollarSign, ShieldCheck } from 'lucide-react';
 import { useCart, CartItem } from '../context/CartContext';
-import { useAuth } from '../context/AuthContext';
+import { useAuth, ShippingAddress } from '../context/AuthContext';
 
 interface CheckoutPageProps {
   productId?: string; // Optional product ID from URL
@@ -16,14 +16,14 @@ interface CheckoutPageProps {
 const CheckoutPage: React.FC<CheckoutPageProps> = ({ productId }) => {
   const navigate = useNavigate();
   const location = useLocation();
-  const { recordUserPurchase, isLoggedIn, user } = useAuth();
-  const { clearCart } = useCart();
+  const { recordUserPurchase, isLoggedIn, user, saveShippingInfo, getShippingInfo } = useAuth();
   const [paymentMethod, setPaymentMethod] = useState<'stripe' | 'paypal' | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
   const [paymentComplete, setPaymentComplete] = useState(false);
   const [paymentError, setPaymentError] = useState<string | null>(null);
   const [paymentId, setPaymentId] = useState<string | null>(null);
   const [isCartLoaded, setIsCartLoaded] = useState(false);
+  const [isLoading, setIsLoading] = useState<boolean>(false);
   
   // Card payment form state
   const [cardNumber, setCardNumber] = useState('');
@@ -40,8 +40,8 @@ const CheckoutPage: React.FC<CheckoutPageProps> = ({ productId }) => {
     email: ''
   });
 
-  // Billing address state
-  const [billingAddress, setBillingAddress] = useState({
+  // Primary Shipping Address state
+  const [primaryShippingAddress, setPrimaryShippingAddress] = useState({
     firstName: '',
     lastName: '',
     organization: '',
@@ -52,8 +52,17 @@ const CheckoutPage: React.FC<CheckoutPageProps> = ({ productId }) => {
     state: '',
     phone: '',
     phoneCountryCode: '+61',
-    termsAgreed: false
+    termsAgreed: false,
+    isDefaultBilling: false
   });
+
+  // Primary Saved Addresses state
+  const [primarySavedAddresses, setPrimarySavedAddresses] = useState<ShippingAddress[]>([]);
+  const [selectedPrimaryAddressId, setSelectedPrimaryAddressId] = useState<number | null>(null);
+  const [showPrimaryAddressForm, setShowPrimaryAddressForm] = useState(true);
+
+  // Add termsAgreed state
+  const [termsAgreed, setTermsAgreed] = useState(false);
 
   // Handle contact info change
   const handleContactInfoChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
@@ -64,10 +73,10 @@ const CheckoutPage: React.FC<CheckoutPageProps> = ({ productId }) => {
     }));
   };
 
-  // Handle billing address change
-  const handleBillingAddressChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
+  // Handle Primary Shipping Address change
+  const handlePrimaryShippingAddressChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value, type, checked } = e.target as HTMLInputElement;
-    setBillingAddress(prevAddress => ({
+    setPrimaryShippingAddress(prevAddress => ({
       ...prevAddress,
       [name]: type === 'checkbox' ? checked : value
     }));
@@ -157,134 +166,51 @@ const CheckoutPage: React.FC<CheckoutPageProps> = ({ productId }) => {
   };
 
   const handlePaymentComplete = async (success: boolean, transactionId?: string, error?: string) => {
-    setIsProcessing(false);
-    
-    if (success && transactionId) {
-      // Capture cart items before setting payment complete (which might trigger UI changes)
-      const currentCartItems = [...cartItems]; 
+    if (success) {
+      setIsLoading(true); // Show loading animation immediately
       
-      setPaymentComplete(true);
-      setPaymentId(transactionId);
-      
-      // Record purchase in Firebase if user is logged in
-      if (isLoggedIn && user) {
-        try {
-          // Define type for purchase items
-          interface PurchaseItem {
-            id: number | string;
-            type: 'product' | 'plan';
-            name: string;
-            description?: string;
-            category?: string;
-            price: string;
-            quantity: number;
-            imageUrl?: string;
-          }
-          
-          let purchaseItems: PurchaseItem[] = [];
-          
-          // If buying a plan
-          if (selectedPlan) {
-            purchaseItems = [{
-              id: selectedPlan.id,
-              type: 'plan',
-              name: selectedPlan.name,
-              price: (selectedPlan.amount / 100).toFixed(2),
-              quantity: 1,
-              imageUrl: selectedPlan.imageUrl || ''
-            }];
-          } 
-          // If checking out cart items
-          else if (currentCartItems.length > 0) {
-            purchaseItems = currentCartItems.map(item => ({
-              id: parseInt(item.id.toString()), // Ensure consistent ID format
-              type: 'product' as const,
-              name: item.title,
-              description: item.description || '',
-              category: item.category || 'Resource',
-              price: item.price.replace(/[^\d.-]/g, ''), // Remove any currency symbols
-              quantity: item.quantity || 1,
-              imageUrl: item.imageUrl || ''
-            }));
-            
-            // Add console log for debugging
-            console.log('Processing purchase items:', purchaseItems);
-            
-            // Clear cart after successfully creating the purchase items array
-            clearCart();
-          } else {
-            console.error('No items found in cart during payment completion');
-          }
-          
-          // Record the purchase with standardized data format
-          const purchaseData = {
-            items: purchaseItems,
-            total: selectedPlan ? (selectedPlan.amount / 100).toFixed(2) : getTotalPrice().toFixed(2),
-            transactionId,
-            paymentMethod: paymentMethod || 'unknown',
-            purchaseDate: new Date().toISOString(),
-            status: 'completed',
-            billingInfo: {
-              firstName: billingAddress.firstName || '',
-              lastName: billingAddress.lastName || '',
-              email: contactInfo.email || ''
-            }
-          };
-          
-          // Add debug logging
-          console.log('Sending purchase data to Firebase:', purchaseData);
-          
-          // Use a try-catch specifically for the recordUserPurchase call
-          try {
-            const purchaseResult = await recordUserPurchase(purchaseData);
-            console.log('Purchase recorded successfully:', purchaseResult);
-          } catch (recordError) {
-            console.error('Failed to record purchase in Firebase:', recordError);
-          }
-          
-        } catch (error) {
-          console.error("Failed to process purchase data:", error);
-          // Still consider the purchase successful even if recording fails
-        }
-      }
-      
-      // Redirect to success page after a short delay
-      setTimeout(() => {
-        // Build a proper items array for the success page state
-        let successItems: CartItem[] = [];
-        let purchaseType: 'cart_items' | 'plan' | 'unknown';
+      try {
+        // Record the purchase in the database
+        const purchaseData = {
+          items: cartItems,
+          paymentMethod: paymentMethod,
+          transactionId: transactionId,
+          amount: getTotalPrice().toFixed(2),
+          shipping: primaryShippingAddress,
+          email: contactInfo.email
+        };
         
-        if (currentCartItems.length > 0) {
-          successItems = currentCartItems;
-          purchaseType = 'cart_items';
-        } else if (selectedPlan) {
-          successItems = [{
-            id: parseInt(selectedPlan.id),
-            title: selectedPlan.name,
-            description: selectedPlan.description,
-            price: `$${(selectedPlan.amount / 100).toFixed(2)}`,
-            quantity: 1,
-            imageUrl: selectedPlan.imageUrl || '',
-            category: 'Subscription Plan'
-          }];
-          purchaseType = 'plan';
-        } else {
-          // Fallback - should never happen if validation is working
-          successItems = [];
-          purchaseType = 'unknown';
+        if (isLoggedIn && user) {
+          await recordUserPurchase(purchaseData);
+          
+          // Also save shipping information if new address was entered
+          if (showPrimaryAddressForm) {
+            await saveShippingInfo({
+              ...primaryShippingAddress,
+              isDefault: primaryShippingAddress.isDefaultBilling || false
+            }, primaryShippingAddress.isDefaultBilling || false);
+          }
         }
         
-        navigate('/payment-success', { 
+        setPaymentId(transactionId || 'TEMP-' + Date.now());
+        setPaymentComplete(true);
+        
+        // Instead of showing completion UI in place, redirect to thank you page
+        navigate('/thankyou', { 
           state: { 
-            paymentId: transactionId,
-            amount: selectedPlan ? (selectedPlan.amount / 100).toFixed(2) : getTotalPrice().toFixed(2),
-            items: successItems,
-            purchaseType: purchaseType
+            transactionId, 
+            amount: getTotalPrice().toFixed(2),
+            email: contactInfo.email 
           } 
         });
-      }, 2000);
-    } else if (error) {
-      setPaymentError(error);
+      } catch (err) {
+        console.error('Error recording purchase:', err);
+        setPaymentError('Failed to record your purchase. Please contact support.');
+        setIsLoading(false);
+      }
+    } else {
+      setPaymentError(error || 'Payment failed. Please try again.');
+      setIsLoading(false);
     }
   };
 
@@ -354,7 +280,7 @@ const CheckoutPage: React.FC<CheckoutPageProps> = ({ productId }) => {
     }
   };
   
-  // Validate card form before submission
+  // Update validation to check for terms agreement
   const validateCardForm = (): boolean => {
     let isValid = true;
     const errors: {
@@ -363,56 +289,50 @@ const CheckoutPage: React.FC<CheckoutPageProps> = ({ productId }) => {
       cvc?: string;
     } = {};
     
-    // Validate card number
+    // Existing validation
     if (!cardNumber || cardNumber.replace(/\s/g, '').length < 16) {
       errors.number = 'Please enter a valid card number';
       isValid = false;
     }
     
-    // Validate expiry date
-    if (!cardExpiry || cardExpiry.length < 5) {
-      errors.expiry = 'Please enter a valid expiry date';
+    if (!cardExpiry || !cardExpiry.includes('/')) {
+      errors.expiry = 'Please enter a valid expiry date (MM/YY)';
       isValid = false;
-    } else {
-      const [month, year] = cardExpiry.split('/');
-      const currentYear = new Date().getFullYear() % 100;
-      const currentMonth = new Date().getMonth() + 1;
-      
-      if (parseInt(year) < currentYear || (parseInt(year) === currentYear && parseInt(month) < currentMonth)) {
-        errors.expiry = 'Card expired';
-        isValid = false;
-      }
     }
     
-    // Validate CVC
     if (!cardCvc || cardCvc.length < 3) {
-      errors.cvc = 'Please enter a valid security code';
+      errors.cvc = 'Please enter a valid CVC code';
       isValid = false;
     }
     
-    // Validate required billing address fields
-    if (!billingAddress.firstName) {
+    if (!contactInfo.email) {
+      alert('Please enter your email address');
+      return false;
+    }
+    
+    if (showPrimaryAddressForm && !primaryShippingAddress.firstName) {
       alert('Please enter your first name');
       return false;
     }
     
-    if (!billingAddress.lastName) {
+    if (showPrimaryAddressForm && !primaryShippingAddress.lastName) {
       alert('Please enter your last name');
       return false;
     }
     
-    if (!billingAddress.streetAddress) {
+    if (showPrimaryAddressForm && !primaryShippingAddress.streetAddress) {
       alert('Please enter your street address');
       return false;
     }
     
-    if (!billingAddress.country) {
+    if (showPrimaryAddressForm && !primaryShippingAddress.country) {
       alert('Please select your country');
       return false;
     }
     
-    if (!billingAddress.termsAgreed) {
-      alert('You must agree to the Terms of Use');
+    // Check for terms agreement
+    if (!termsAgreed) {
+      alert('You must agree to the Terms of Use to complete your purchase');
       return false;
     }
     
@@ -426,22 +346,22 @@ const CheckoutPage: React.FC<CheckoutPageProps> = ({ productId }) => {
       setIsProcessing(true);
       
       // In a real application, you would make a request to your payment processor here
-      // with both card details and billing address
+      // with both card details and shipping address
       // For this demo, we'll simulate a successful payment after a short delay
       setTimeout(() => {
         const paymentData = {
           cardNumber: cardNumber.replace(/\s/g, ''),
           cardExpiry,
           billingAddress: {
-            firstName: billingAddress.firstName,
-            lastName: billingAddress.lastName,
-            organization: billingAddress.organization,
-            streetAddress: billingAddress.streetAddress,
-            city: billingAddress.city,
-            postcode: billingAddress.postcode,
-            country: billingAddress.country,
-            state: billingAddress.state,
-            phone: `${billingAddress.phoneCountryCode} ${billingAddress.phone}`
+            firstName: primaryShippingAddress.firstName,
+            lastName: primaryShippingAddress.lastName,
+            organization: primaryShippingAddress.organization,
+            streetAddress: primaryShippingAddress.streetAddress,
+            city: primaryShippingAddress.city,
+            postcode: primaryShippingAddress.postcode,
+            country: primaryShippingAddress.country,
+            state: primaryShippingAddress.state,
+            phone: `${primaryShippingAddress.phoneCountryCode} ${primaryShippingAddress.phone}`
           }
         };
         
@@ -451,6 +371,101 @@ const CheckoutPage: React.FC<CheckoutPageProps> = ({ productId }) => {
     }
   };
 
+  // Rename loadBillingInfo to loadShippingInfo
+  const loadShippingInfo = async () => {
+    try {
+      if (isLoggedIn && user) {
+        const shippingAddresses = await getShippingInfo();
+        setPrimarySavedAddresses(shippingAddresses);
+        
+        // If user has a default shipping address, use it
+        const defaultAddress = shippingAddresses.find(addr => addr.isDefault);
+        
+        if (defaultAddress) {
+          setPrimaryShippingAddress({
+            firstName: defaultAddress.firstName || '',
+            lastName: defaultAddress.lastName || '',
+            organization: defaultAddress.organization || '',
+            streetAddress: defaultAddress.streetAddress || '',
+            city: defaultAddress.city || '',
+            postcode: defaultAddress.postcode || '',
+            country: defaultAddress.country || '',
+            state: defaultAddress.state || '',
+            phone: defaultAddress.phone || '',
+            phoneCountryCode: defaultAddress.phoneCountryCode || '+61',
+            termsAgreed: false,
+            isDefaultBilling: true
+          });
+          
+          // If there are saved addresses, don't immediately show the form
+          if (shippingAddresses.length > 0) {
+            setShowPrimaryAddressForm(false);
+            setSelectedPrimaryAddressId(shippingAddresses.findIndex(addr => addr.isDefault));
+          }
+        }
+      }
+    } catch (error) {
+      console.error('Error loading shipping information:', error);
+    }
+  };
+
+  // Rename handleAddressSelect to handlePrimaryAddressSelect
+  const handlePrimaryAddressSelect = (index: number) => {
+    if (index >= 0 && index < primarySavedAddresses.length) {
+      const selectedAddress = primarySavedAddresses[index];
+      setPrimaryShippingAddress({
+        firstName: selectedAddress.firstName || '',
+        lastName: selectedAddress.lastName || '',
+        organization: selectedAddress.organization || '',
+        streetAddress: selectedAddress.streetAddress || '',
+        city: selectedAddress.city || '',
+        postcode: selectedAddress.postcode || '',
+        country: selectedAddress.country || '',
+        state: selectedAddress.state || '',
+        phone: selectedAddress.phone || '',
+        phoneCountryCode: selectedAddress.phoneCountryCode || '+61',
+        termsAgreed: primaryShippingAddress.termsAgreed,
+        isDefaultBilling: !!selectedAddress.isDefault
+      });
+      setSelectedPrimaryAddressId(index);
+    }
+  };
+
+  // Rename handleUseNewAddress to handleUsePrimaryNewAddress
+  const handleUsePrimaryNewAddress = () => {
+    setShowPrimaryAddressForm(true);
+    setSelectedPrimaryAddressId(null);
+  };
+
+  // Update the useEffect to use loadShippingInfo instead of loadBillingInfo
+  // Also remove any references to loadShippingAddresses since we're consolidating
+  useEffect(() => {
+    // Redirect to sign in if not logged in
+    if (!isLoggedIn) {
+      navigate('/signin', { 
+        state: { 
+          redirectUrl: location.pathname,
+          message: 'Please sign in to complete your purchase' 
+        } 
+      });
+      return;
+    }
+
+    // Load existing shipping information if available
+    loadShippingInfo();
+  }, [isLoggedIn, user, navigate, location.pathname]);
+
+  // Update PayPal payment handling to check for terms agreement
+  const handlePayPalPaymentComplete = (details: any) => {
+    if (!termsAgreed) {
+      alert('You must agree to the Terms of Use to complete your purchase');
+      return;
+    }
+    
+    console.log("PayPal payment completed:", details);
+    handlePaymentComplete(true, details.id);
+  };
+
   return (
     <div className="bg-[#f8f9fa]">
       <Header />
@@ -458,7 +473,18 @@ const CheckoutPage: React.FC<CheckoutPageProps> = ({ productId }) => {
       <div className="container mx-auto px-4 py-8 md:py-12">
         <h1 className="text-2xl md:text-3xl font-bold text-center mb-8 text-[#2d3748]">Checkout</h1>
         
+        {isLoading && (
+          <div className="fixed inset-0 bg-gray-900 bg-opacity-50 flex items-center justify-center z-50">
+            <div className="bg-white p-6 rounded-lg shadow-xl text-center max-w-md w-full">
+              <div className="animate-spin mx-auto w-12 h-12 border-4 border-[#2bcd82] border-t-transparent rounded-full mb-4"></div>
+              <h2 className="text-xl font-semibold text-gray-800 mb-2">Processing Your Order</h2>
+              <p className="text-gray-600">Please wait while we complete your purchase...</p>
+            </div>
+          </div>
+        )}
+        
         {paymentComplete ? (
+          // This will only show briefly before redirect
           <div className="max-w-md mx-auto bg-white p-8 rounded-lg shadow-sm">
             <div className="text-center">
               <div className="w-16 h-16 bg-green-50 rounded-full flex items-center justify-center mx-auto mb-4">
@@ -486,197 +512,227 @@ const CheckoutPage: React.FC<CheckoutPageProps> = ({ productId }) => {
                 <h2 className="text-xl font-semibold mb-4 pb-3 border-b border-gray-100">Your Information</h2>
                 
                 <div className="mb-4">
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Email Address*</label>
+                  <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-1">
+                    Email Address <span className="text-red-500">*</span>
+                  </label>
                   <input
                     type="email"
+                    id="email"
                     name="email"
                     value={contactInfo.email}
                     onChange={handleContactInfoChange}
                     className="w-full p-3 border border-gray-300 rounded-md focus:ring-1 focus:ring-[#2bcd82] focus:border-[#2bcd82] transition-colors"
-                    placeholder="your@email.com"
                     required
                   />
                   <p className="mt-1 text-xs text-gray-500">Your receipt and download links will be sent to this email</p>
                 </div>
               </div>
               
-              {/* Billing Address Section */}
+              {/* Shipping Address Section */}
               <div className="bg-white rounded-lg shadow-sm p-6 mb-6">
-                <h2 className="text-xl font-semibold mb-4 pb-3 border-b border-gray-100">Billing Address</h2>
+                <h2 className="text-xl font-semibold mb-4 pb-3 border-b border-gray-100">Shipping Address</h2>
                 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      First name <span className="text-red-500">*</span>
-                    </label>
-                    <input
-                      type="text"
-                      name="firstName"
-                      value={billingAddress.firstName}
-                      onChange={handleBillingAddressChange}
-                      className="w-full p-3 border border-gray-300 rounded-md focus:ring-1 focus:ring-[#2bcd82] focus:border-[#2bcd82] transition-colors"
-                      required
-                    />
-                  </div>
-                  
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Last name <span className="text-red-500">*</span>
-                    </label>
-                    <input
-                      type="text"
-                      name="lastName"
-                      value={billingAddress.lastName}
-                      onChange={handleBillingAddressChange}
-                      className="w-full p-3 border border-gray-300 rounded-md focus:ring-1 focus:ring-[#2bcd82] focus:border-[#2bcd82] transition-colors"
-                      required
-                    />
-                  </div>
-                </div>
-                
-                <div className="mb-4">
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Organization
-                  </label>
-                  <input
-                    type="text"
-                    name="organization"
-                    value={billingAddress.organization}
-                    onChange={handleBillingAddressChange}
-                    className="w-full p-3 border border-gray-300 rounded-md focus:ring-1 focus:ring-[#2bcd82] focus:border-[#2bcd82] transition-colors"
-                  />
-                </div>
-                
-                <div className="mb-4">
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Street address <span className="text-red-500">*</span>
-                  </label>
-                  <input
-                    type="text"
-                    name="streetAddress"
-                    value={billingAddress.streetAddress}
-                    onChange={handleBillingAddressChange}
-                    className="w-full p-3 border border-gray-300 rounded-md focus:ring-1 focus:ring-[#2bcd82] focus:border-[#2bcd82] transition-colors"
-                    required
-                  />
-                </div>
-                
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Town / City
-                    </label>
-                    <input
-                      type="text"
-                      name="city"
-                      value={billingAddress.city}
-                      onChange={handleBillingAddressChange}
-                      className="w-full p-3 border border-gray-300 rounded-md focus:ring-1 focus:ring-[#2bcd82] focus:border-[#2bcd82] transition-colors"
-                    />
-                  </div>
-                  
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Postcode / ZIP
-                    </label>
-                    <input
-                      type="text"
-                      name="postcode"
-                      value={billingAddress.postcode}
-                      onChange={handleBillingAddressChange}
-                      className="w-full p-3 border border-gray-300 rounded-md focus:ring-1 focus:ring-[#2bcd82] focus:border-[#2bcd82] transition-colors"
-                    />
-                  </div>
-                </div>
-                
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Country <span className="text-red-500">*</span>
-                    </label>
-                    <select
-                      name="country"
-                      value={billingAddress.country}
-                      onChange={handleBillingAddressChange}
-                      className="w-full p-3 border border-gray-300 rounded-md focus:ring-1 focus:ring-[#2bcd82] focus:border-[#2bcd82] transition-colors"
-                      required
-                    >
-                      <option value="">Select a country</option>
-                      <option value="AU">Australia</option>
-                      <option value="US">United States</option>
-                      <option value="GB">United Kingdom</option>
-                      <option value="CA">Canada</option>
-                      <option value="NZ">New Zealand</option>
-                    </select>
-                  </div>
-                  
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      State / County
-                    </label>
-                    <input
-                      type="text"
-                      name="state"
-                      value={billingAddress.state}
-                      onChange={handleBillingAddressChange}
-                      className="w-full p-3 border border-gray-300 rounded-md focus:ring-1 focus:ring-[#2bcd82] focus:border-[#2bcd82] transition-colors"
-                    />
-                  </div>
-                </div>
-                
-                <div className="mb-4">
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Phone
-                  </label>
-                  <div className="flex">
-                    <div className="w-20">
-                      <select
-                        name="phoneCountryCode"
-                        value={billingAddress.phoneCountryCode}
-                        onChange={handleBillingAddressChange}
-                        className="w-full p-3 border border-gray-300 rounded-l-md focus:ring-1 focus:ring-[#2bcd82] focus:border-[#2bcd82] transition-colors"
-                      >
-                        <option value="+61">🇦🇺 +61</option>
-                        <option value="+1">🇺🇸 +1</option>
-                        <option value="+44">🇬🇧 +44</option>
-                        <option value="+64">🇳🇿 +64</option>
-                        <option value="+1">🇨🇦 +1</option>
-                      </select>
+                {/* Saved Addresses Section */}
+                {primarySavedAddresses.length > 0 && (
+                  <div className="mb-6">
+                    <h3 className="text-lg font-medium mb-3">Your Saved Addresses</h3>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                      {primarySavedAddresses.map((address, index) => (
+                        <div 
+                          key={index}
+                          className={`border p-4 rounded-md cursor-pointer transition-all ${
+                            selectedPrimaryAddressId === index 
+                              ? 'border-[#2bcd82] bg-green-50' 
+                              : 'border-gray-200 hover:border-gray-400'
+                          }`}
+                          onClick={() => handlePrimaryAddressSelect(index)}
+                        >
+                          <div className="flex justify-between items-start mb-2">
+                            <div className="font-medium">{address.firstName} {address.lastName}</div>
+                            {address.isDefault && (
+                              <span className="text-xs bg-[#2bcd82] text-white px-2 py-1 rounded-full">Default</span>
+                            )}
+                          </div>
+                          {address.organization && <div className="text-gray-600 text-sm">{address.organization}</div>}
+                          <div className="text-gray-600 text-sm">{address.streetAddress}</div>
+                          <div className="text-gray-600 text-sm">
+                            {address.city}{address.city && address.state ? ', ' : ''}{address.state} {address.postcode}
+                          </div>
+                          <div className="text-gray-600 text-sm">{address.country}</div>
+                        </div>
+                      ))}
                     </div>
-                    <input
-                      type="tel"
-                      name="phone"
-                      value={billingAddress.phone}
-                      onChange={handleBillingAddressChange}
-                      className="flex-1 p-3 border border-gray-300 border-l-0 rounded-r-md focus:ring-1 focus:ring-[#2bcd82] focus:border-[#2bcd82] transition-colors"
-                      placeholder="Phone number"
-                    />
+                    
+                    <div className="flex space-x-4">
+                      <button
+                        type="button"
+                        onClick={handleUsePrimaryNewAddress}
+                        className={`px-4 py-2 text-sm border rounded-md transition-colors ${
+                          showPrimaryAddressForm 
+                            ? 'bg-gray-100 border-gray-300 text-gray-800' 
+                            : 'border-gray-300 text-gray-600 hover:bg-gray-50'
+                        }`}
+                      >
+                        Use a new address
+                      </button>
+                    </div>
                   </div>
-                </div>
+                )}
                 
-                <div className="mb-4">
-                  <div className="flex items-start">
-                    <div className="flex items-center h-5">
+                {/* Shipping Address Form */}
+                {showPrimaryAddressForm && (
+                  <div className="space-y-4">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                          First name <span className="text-red-500">*</span>
+                        </label>
+                        <input
+                          type="text"
+                          name="firstName"
+                          value={primaryShippingAddress.firstName}
+                          onChange={handlePrimaryShippingAddressChange}
+                          className="w-full p-3 border border-gray-300 rounded-md focus:ring-1 focus:ring-[#2bcd82] focus:border-[#2bcd82] transition-colors"
+                          required
+                        />
+                      </div>
+                      
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                          Last name <span className="text-red-500">*</span>
+                        </label>
+                        <input
+                          type="text"
+                          name="lastName"
+                          value={primaryShippingAddress.lastName}
+                          onChange={handlePrimaryShippingAddressChange}
+                          className="w-full p-3 border border-gray-300 rounded-md focus:ring-1 focus:ring-[#2bcd82] focus:border-[#2bcd82] transition-colors"
+                          required
+                        />
+                      </div>
+                    </div>
+                    
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Organization
+                      </label>
                       <input
-                        id="terms"
-                        name="termsAgreed"
-                        type="checkbox"
-                        checked={billingAddress.termsAgreed}
-                        onChange={handleBillingAddressChange}
-                        className="w-4 h-4 text-[#2bcd82] border-gray-300 rounded focus:ring-[#2bcd82]"
+                        type="text"
+                        name="organization"
+                        value={primaryShippingAddress.organization}
+                        onChange={handlePrimaryShippingAddressChange}
+                        className="w-full p-3 border border-gray-300 rounded-md focus:ring-1 focus:ring-[#2bcd82] focus:border-[#2bcd82] transition-colors"
+                      />
+                    </div>
+                    
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Street address <span className="text-red-500">*</span>
+                      </label>
+                      <input
+                        type="text"
+                        name="streetAddress"
+                        value={primaryShippingAddress.streetAddress}
+                        onChange={handlePrimaryShippingAddressChange}
+                        className="w-full p-3 border border-gray-300 rounded-md focus:ring-1 focus:ring-[#2bcd82] focus:border-[#2bcd82] transition-colors"
                         required
                       />
                     </div>
-                    <div className="ml-3 text-sm">
-                      <label htmlFor="terms" className="font-medium text-gray-700">
-                        I have read and agree to the <a href="/terms" className="text-[#2bcd82] hover:underline">Terms of Use</a> <span className="text-red-500">*</span>
+                    
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                          Town / City
+                        </label>
+                        <input
+                          type="text"
+                          name="city"
+                          value={primaryShippingAddress.city}
+                          onChange={handlePrimaryShippingAddressChange}
+                          className="w-full p-3 border border-gray-300 rounded-md focus:ring-1 focus:ring-[#2bcd82] focus:border-[#2bcd82] transition-colors"
+                        />
+                      </div>
+                      
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                          Postcode / ZIP
+                        </label>
+                        <input
+                          type="text"
+                          name="postcode"
+                          value={primaryShippingAddress.postcode}
+                          onChange={handlePrimaryShippingAddressChange}
+                          className="w-full p-3 border border-gray-300 rounded-md focus:ring-1 focus:ring-[#2bcd82] focus:border-[#2bcd82] transition-colors"
+                        />
+                      </div>
+                    </div>
+                    
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                          Country <span className="text-red-500">*</span>
+                        </label>
+                        <select
+                          name="country"
+                          value={primaryShippingAddress.country}
+                          onChange={handlePrimaryShippingAddressChange}
+                          className="w-full p-3 border border-gray-300 rounded-md focus:ring-1 focus:ring-[#2bcd82] focus:border-[#2bcd82] transition-colors"
+                          required
+                        >
+                          <option value="">Select a country</option>
+                          <option value="AU">Australia</option>
+                          <option value="US">United States</option>
+                          <option value="GB">United Kingdom</option>
+                          <option value="CA">Canada</option>
+                          <option value="NZ">New Zealand</option>
+                        </select>
+                      </div>
+                      
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                          State / County
+                        </label>
+                        <input
+                          type="text"
+                          name="state"
+                          value={primaryShippingAddress.state}
+                          onChange={handlePrimaryShippingAddressChange}
+                          className="w-full p-3 border border-gray-300 rounded-md focus:ring-1 focus:ring-[#2bcd82] focus:border-[#2bcd82] transition-colors"
+                        />
+                      </div>
+                    </div>
+                    
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Phone
                       </label>
-                      <p className="text-gray-500 mt-1">
-                        and acknowledge that all resources are licensed for use by a single user only and are not to be shared or distributed. For multi-user licensing options, <a href="/contact" className="text-[#2bcd82] hover:underline">click here</a>
-                      </p>
+                      <div className="flex">
+                        <div className="w-20">
+                          <select
+                            name="phoneCountryCode"
+                            value={primaryShippingAddress.phoneCountryCode}
+                            onChange={handlePrimaryShippingAddressChange}
+                            className="w-full p-3 border border-gray-300 rounded-l-md focus:ring-1 focus:ring-[#2bcd82] focus:border-[#2bcd82] transition-colors"
+                          >
+                            <option value="+61">🇦🇺 +61</option>
+                            <option value="+1">🇺🇸 +1</option>
+                            <option value="+44">🇬🇧 +44</option>
+                            <option value="+64">🇳🇿 +64</option>
+                            <option value="+1">🇨🇦 +1</option>
+                          </select>
+                        </div>
+                        <input
+                          type="tel"
+                          name="phone"
+                          value={primaryShippingAddress.phone}
+                          onChange={handlePrimaryShippingAddressChange}
+                          className="flex-1 p-3 border border-gray-300 border-l-0 rounded-r-md focus:ring-1 focus:ring-[#2bcd82] focus:border-[#2bcd82] transition-colors"
+                          placeholder="Phone number"
+                        />
+                      </div>
                     </div>
                   </div>
-                </div>
+                )}
               </div>
               
               {/* Payment Method Section */}
@@ -798,9 +854,29 @@ const CheckoutPage: React.FC<CheckoutPageProps> = ({ productId }) => {
                           </div>
                         </div>
                         
-                        <div className="flex items-center mb-4 text-xs text-gray-600">
-                          <Lock className="w-3 h-3 mr-1 text-gray-500" />
-                          <p>Your payment information is secured with SSL encryption</p>
+                        {/* Terms Agreement Checkbox */}
+                        <div className="mb-6">
+                          <div className="flex items-start">
+                            <div className="flex items-center h-5">
+                              <input
+                                id="terms-agreement"
+                                name="terms-agreement"
+                                type="checkbox"
+                                checked={termsAgreed}
+                                onChange={(e) => setTermsAgreed(e.target.checked)}
+                                className="w-4 h-4 text-[#2bcd82] border-gray-300 rounded focus:ring-[#2bcd82]"
+                                required
+                              />
+                            </div>
+                            <div className="ml-3 text-sm">
+                              <label htmlFor="terms-agreement" className="font-medium text-gray-700">
+                                I have read and agree to the <a href="/terms" className="text-[#2bcd82] hover:underline">Terms of Use</a> <span className="text-red-500">*</span>
+                              </label>
+                              <p className="text-gray-500 mt-1">
+                                By completing this purchase, you agree that all resources are licensed for use by a single user only and are not to be shared or distributed.
+                              </p>
+                            </div>
+                          </div>
                         </div>
                         
                         <button 
@@ -825,10 +901,40 @@ const CheckoutPage: React.FC<CheckoutPageProps> = ({ productId }) => {
                     
                     {paymentMethod === 'paypal' && (
                       <div>
+                        <div className="mb-5 flex items-center">
+                          <span className="text-sm font-medium text-gray-600 mr-auto">Secure PayPal payment</span>
+                          <img src="https://www.paypalobjects.com/webstatic/mktg/logo/pp_cc_mark_74x46.jpg" alt="PayPal" className="h-6 w-10" />
+                        </div>
+                        
+                        {/* Terms Agreement Checkbox */}
+                        <div className="mb-6">
+                          <div className="flex items-start">
+                            <div className="flex items-center h-5">
+                              <input
+                                id="terms-agreement-paypal"
+                                name="terms-agreement"
+                                type="checkbox"
+                                checked={termsAgreed}
+                                onChange={(e) => setTermsAgreed(e.target.checked)}
+                                className="w-4 h-4 text-[#2bcd82] border-gray-300 rounded focus:ring-[#2bcd82]"
+                                required
+                              />
+                            </div>
+                            <div className="ml-3 text-sm">
+                              <label htmlFor="terms-agreement-paypal" className="font-medium text-gray-700">
+                                I have read and agree to the <a href="/terms" className="text-[#2bcd82] hover:underline">Terms of Use</a> <span className="text-red-500">*</span>
+                              </label>
+                              <p className="text-gray-500 mt-1">
+                                By completing this purchase, you agree that all resources are licensed for use by a single user only and are not to be shared or distributed.
+                              </p>
+                            </div>
+                          </div>
+                        </div>
+                        
                         <PayPalPayment
                           amount={paymentAmount}
                           productName={showCartItems ? 'Cart Purchase' : product.name}
-                          onPaymentComplete={handlePaymentComplete}
+                          onPaymentComplete={handlePayPalPaymentComplete}
                         />
                         
                         {/* Manual PayPal completion button */}

@@ -281,7 +281,7 @@ const HomePage: React.FC = () => {
                 <div 
                   key={product.id} 
                   className="bg-white rounded-lg shadow-md overflow-hidden cursor-pointer transition-transform hover:scale-105"
-                  onClick={() => navigate(`/resource/${product.id}`)}
+                  onClick={() => navigate(`/catalog/${product.id}`)}
                 >
                   <div className="h-48 overflow-hidden">
                     <img 
@@ -298,7 +298,7 @@ const HomePage: React.FC = () => {
                         className="bg-[#2bcd82] hover:bg-[#25b975] text-white font-medium py-1 px-4 rounded-full"
                         onClick={(e) => {
                           e.stopPropagation(); // Prevent triggering the parent card's onClick
-                          navigate(`/resource/${product.id}`);
+                          navigate(`/catalog/${product.id}`);
                         }}
                       >
                         View Details
