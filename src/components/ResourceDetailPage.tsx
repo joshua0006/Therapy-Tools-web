@@ -1,25 +1,165 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, ShoppingCart, Check, Star, Loader, Clock, BookOpen, Users } from 'lucide-react';
+import { ArrowLeft, ShoppingCart, Check, Star, Loader, Clock, BookOpen, Users, AlertCircle, FileText, Download, LockIcon, ShieldCheck, Info, CheckCircle, Tag } from 'lucide-react';
 import Header from './Header';
 import Footer from './Footer';
 import Button from './Button';
 import { useCart } from '../context/CartContext';
-import { fetchProduct } from '../lib/woocommerce/products';
-import { Product } from '../types';
-import { useWooCommerce } from '../context/WooCommerceContext';
+import { useAuth } from '../context/AuthContext';
 import { toast } from 'react-hot-toast';
+import { getFirestore, doc, getDoc, collection, query, where, getDocs } from 'firebase/firestore';
+import { app } from '../lib/firebase';
+import SecurePdfViewer from './SecurePdfViewer';
+
+// Use the same FirebaseProduct interface as in CatalogPage
+interface FirebaseProduct {
+  id: string;
+  name?: string;
+  title?: string;
+  description?: string;
+  content?: string;
+  price?: number | string;
+  thumbnail?: string;
+  category?: string;
+  downloads?: Array<{
+    id: string;
+    name: string;
+    file: string;
+  }>;
+  images?: Array<{ src: string }>;
+  image?: string;
+  fileUrl?: string;
+  pdfUrl?: string;
+  details?: {
+    difficulty?: string;
+    duration?: string;
+    ageRange?: string;
+    targetAudience?: string;
+    [key: string]: any;
+  };
+  [key: string]: any;
+}
+
+// Sample fallback product in case of Firebase access issues
+const SAMPLE_PRODUCT: FirebaseProduct = {
+  id: "sample-1",
+  name: "Speech Sound Handbook",
+  description: "Comprehensive guide for speech-language pathologists working with children who have phonological disorders.",
+  content: "<p>This handbook provides detailed instructions and resources for assessing and treating various speech sound disorders. It includes practical strategies, worksheets, and evidence-based approaches to help clinicians provide effective therapy.</p><p>Perfect for both new and experienced SLPs looking to expand their knowledge and clinical skills.</p>",
+  price: 29.99,
+  thumbnail: "",
+  category: "Guides",
+  details: {
+    difficulty: "Intermediate",
+    duration: "Self-paced",
+    ageRange: "3-12 years",
+    targetAudience: "Speech-Language Pathologists"
+  }
+};
+
+// Helper function to format currency
+const formatCurrency = (amount: number): string => {
+  return new Intl.NumberFormat('en-US', {
+    style: 'currency',
+    currency: 'USD',
+    minimumFractionDigits: 2
+  }).format(amount);
+};
+
+// Add a helper function to safely check if text contains HTML
+const containsHtml = (text: string): boolean => {
+  return /<\/?[a-z][\s\S]*>/i.test(text);
+};
 
 const ResourceDetailPage: React.FC = () => {
   const { resourceId } = useParams<{ resourceId: string }>();
   const navigate = useNavigate();
-  const [product, setProduct] = useState<Product | null>(null);
+  const [product, setProduct] = useState<FirebaseProduct | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<'description' | 'details' | 'reviews'>('description');
+  const [usingMockData, setUsingMockData] = useState(false);
+  const [relatedProducts, setRelatedProducts] = useState<FirebaseProduct[]>([]);
+  const [hasPurchased, setHasPurchased] = useState(false);
+  const [checkingPurchase, setCheckingPurchase] = useState(true);
   
-  const { featuredProducts } = useWooCommerce();
+  // Add PDF viewer states
+  const [isPdfViewerVisible, setIsPdfViewerVisible] = useState(false);
+  const [pdfDetails, setPdfDetails] = useState<{ url: string; name: string } | null>(null);
+  
   const { addToCart } = useCart();
+  const { user, isLoggedIn, getUserPurchaseHistory } = useAuth();
+  
+  // Create Firestore instance directly
+  const db = getFirestore(app);
+  
+  // Check if product has PDFs
+  const hasPdfFiles = (product: FirebaseProduct): boolean => {
+    // Check downloads array
+    if (product.downloads && product.downloads.length > 0) {
+      const pdfDownloads = product.downloads.filter(download => 
+        download.file && download.file.toLowerCase().endsWith('.pdf')
+      );
+      if (pdfDownloads.length > 0) return true;
+    }
+    
+    // Check direct PDF URL
+    if (product.pdfUrl && product.pdfUrl.toLowerCase().endsWith('.pdf')) {
+      return true;
+    }
+    
+    // Check fileUrl
+    if (product.fileUrl && product.fileUrl.toLowerCase().endsWith('.pdf')) {
+      return true;
+    }
+    
+    return false;
+  };
+  
+  // Get product price regardless of format
+  const getProductPrice = (product: FirebaseProduct): number => {
+    if (typeof product.price === 'number') {
+      return product.price;
+    } else if (typeof product.price === 'string') {
+      return parseFloat(product.price.replace(/[^0-9.-]+/g, '')) || 0;
+    }
+    return 0;
+  };
+  
+  // Check if user has purchased this product
+  useEffect(() => {
+    const checkPurchaseStatus = async () => {
+      if (!resourceId || !isLoggedIn || !user) {
+        setHasPurchased(false);
+        setCheckingPurchase(false);
+        return;
+      }
+      
+      try {
+        setCheckingPurchase(true);
+        
+        // Get user purchase history
+        const purchaseHistory = await getUserPurchaseHistory();
+        
+        // Check if the current product is in any of the purchase items
+        const hasProduct = purchaseHistory.some(purchase => 
+          purchase.items.some((item: { id: string | number }) => 
+            item.id.toString() === resourceId.toString()
+          )
+        );
+        
+        setHasPurchased(hasProduct);
+        console.log(`User has ${hasProduct ? '' : 'not '}purchased this product`);
+      } catch (err) {
+        console.error('Error checking purchase status:', err);
+        setHasPurchased(false);
+      } finally {
+        setCheckingPurchase(false);
+      }
+    };
+    
+    checkPurchaseStatus();
+  }, [resourceId, isLoggedIn, user, getUserPurchaseHistory]);
   
   // Fetch product data when component mounts
   useEffect(() => {
@@ -30,51 +170,212 @@ const ResourceDetailPage: React.FC = () => {
         return;
       }
       
+      if (!db) {
+        setError('Firebase Firestore instance not found. Please check your configuration.');
+        loadSampleProduct();
+        return;
+      }
+      
       try {
-        const loadedProduct = await fetchProduct(resourceId);
-        setProduct(loadedProduct);
+        setLoading(true);
         setError(null);
+        console.log(`Fetching product with ID: ${resourceId} from Firebase...`);
+        
+        // First try direct document lookup
+        let productData: FirebaseProduct | null = null;
+        
+        try {
+          // Try to get document directly by ID
+          const docRef = doc(db, 'products', resourceId);
+          const docSnap = await getDoc(docRef);
+          
+          if (docSnap.exists()) {
+            productData = { id: docSnap.id, ...docSnap.data() };
+            console.log('Found product by direct ID:', productData);
+          } else {
+            console.log('No product found with direct ID, trying query...');
+          }
+        } catch (err) {
+          console.warn('Error fetching product by direct ID:', err);
+          // Continue to alternative query methods
+        }
+        
+        // If not found by direct ID, try querying
+        if (!productData) {
+          try {
+            const productsRef = collection(db, 'products');
+            // Query by ID field
+            const q = query(productsRef, where('id', '==', resourceId));
+            const querySnapshot = await getDocs(q);
+            
+            if (!querySnapshot.empty) {
+              const docData = querySnapshot.docs[0];
+              productData = { id: docData.id, ...docData.data() };
+              console.log('Found product by ID field query:', productData);
+            } else {
+              // Try querying all products to find a match
+              const allProductsSnapshot = await getDocs(collection(db, 'products'));
+              
+              // String comparison for ID matching
+              const matchingDoc = allProductsSnapshot.docs.find(doc => 
+                doc.id === resourceId || String(doc.data().id) === resourceId
+              );
+              
+              if (matchingDoc) {
+                productData = { id: matchingDoc.id, ...matchingDoc.data() };
+                console.log('Found product by string comparison:', productData);
+              } else {
+                throw new Error(`Product with ID ${resourceId} not found`);
+              }
+            }
+          } catch (err) {
+            console.error('Error querying for product:', err);
+            throw err;
+          }
+        }
+        
+        // If we have a product, also fetch related products by category
+        if (productData) {
+          setProduct(productData);
+          setUsingMockData(false);
+          
+          // Fetch related products in the same category
+          try {
+            const category = productData.category;
+            if (category) {
+              const relatedQuery = query(
+                collection(db, 'products'), 
+                where('category', '==', category)
+              );
+              const relatedSnapshot = await getDocs(relatedQuery);
+              
+              const related: FirebaseProduct[] = [];
+              relatedSnapshot.forEach(doc => {
+                // Don't include the current product
+                if (doc.id !== resourceId) {
+                  related.push({ id: doc.id, ...doc.data() });
+                }
+              });
+              
+              setRelatedProducts(related.slice(0, 3)); // Limit to 3 related products
+            }
+          } catch (err) {
+            console.warn('Error fetching related products:', err);
+            // Non-critical error, can continue without related products
+          }
+        }
+        
+        setLoading(false);
       } catch (err) {
         console.error('Error loading product:', err);
-        setError('Failed to load resource. Please try again later.');
-      } finally {
-        setLoading(false);
+        const errorMessage = err instanceof Error ? err.message : 'Unknown error';
+        
+        if (errorMessage.includes('permission') || errorMessage.includes('insufficient')) {
+          setError('Firebase permissions error: You do not have access to the products collection.');
+          loadSampleProduct();
+        } else {
+          setError(`Failed to load product: ${errorMessage}`);
+          loadSampleProduct();
+        }
       }
     };
     
-    loadProduct();
-  }, [resourceId]);
-  
-  // Handle adding the product to cart
-  const handleAddToCart = () => {
-    if (!product) return;
+    // Load sample product as fallback
+    const loadSampleProduct = () => {
+      console.log('Loading sample product as fallback');
+      setProduct({...SAMPLE_PRODUCT, id: resourceId || SAMPLE_PRODUCT.id});
+      setUsingMockData(true);
+      setLoading(false);
+    };
     
-    try {
+    loadProduct();
+  }, [resourceId, db]);
+  
+  const handleAddToCart = () => {
+    if (product) {
       addToCart({
-        id: Number(product.id),
-        title: product.name,
-        description: product.description,
-        category: product.category || '',
-        imageUrl: product.thumbnail || '',
-        price: product.price.toString(),
+        id: parseInt(product.id, 10) || Math.floor(Math.random() * 10000),
+        title: product.name || product.title || 'Unnamed Product',
+        description: product.description || '',
+        category: product.category || 'Uncategorized',
+        imageUrl: product.thumbnail || product.image || product.images?.[0]?.src || '',
+        price: getProductPrice(product).toString(),
         quantity: 1
       });
       
-      toast.success(`${product.name} added to cart!`);
-    } catch (error) {
-      console.error("Error adding to cart:", error);
-      toast.error("Error adding to cart. Please try again.");
+      toast.success(`${product.name || product.title || 'Product'} added to cart!`);
     }
+  };
+  
+  // Update the handleViewPdf function to use the secure viewer
+  const handleViewPdf = () => {
+    if (!isLoggedIn) {
+      toast.error('Please log in to view this PDF');
+      navigate('/login');
+      return;
+    }
+    
+    if (!hasPurchased) {
+      toast.error('You need to purchase this product to view the PDF');
+      return;
+    }
+    
+    if (product && resourceId) {
+      // Check if we have direct PDF details
+      if (product.pdfUrl) {
+        setPdfDetails({
+          url: product.pdfUrl,
+          name: product.name || product.title || 'PDF Document'
+        });
+        setIsPdfViewerVisible(true);
+        return;
+      }
+      
+      // Check for PDF in downloads array
+      if (product.downloads && product.downloads.length > 0) {
+        const pdfDownloads = product.downloads.filter(download => 
+          download.file && download.file.toLowerCase().endsWith('.pdf')
+        );
+        
+        if (pdfDownloads.length > 0) {
+          setPdfDetails({
+            url: pdfDownloads[0].file,
+            name: pdfDownloads[0].name || product.name || 'PDF Document'
+          });
+          setIsPdfViewerVisible(true);
+          return;
+        }
+      }
+      
+      // Check fileUrl as a last resort
+      if (product.fileUrl && product.fileUrl.toLowerCase().endsWith('.pdf')) {
+        setPdfDetails({
+          url: product.fileUrl,
+          name: product.name || product.title || 'PDF Document'
+        });
+        setIsPdfViewerVisible(true);
+        return;
+      }
+      
+      // If no PDF found
+      toast.error('No PDF file found for this product');
+    }
+  };
+  
+  // Add function to close PDF viewer
+  const handleClosePdfViewer = () => {
+    setIsPdfViewerVisible(false);
+    setPdfDetails(null);
   };
   
   if (loading) {
     return (
-      <div className="min-h-screen bg-gradient-to-b from-gray-50 to-gray-100 flex flex-col">
+      <div className="min-h-screen bg-gray-50 flex flex-col">
         <Header />
-        <main className="flex-grow container mx-auto px-4 py-8 flex items-center justify-center">
-          <div className="text-center">
-            <Loader className="w-14 h-14 text-[#2bcd82] animate-spin mx-auto mb-6" />
-            <p className="text-gray-600 text-xl font-medium">Loading resource...</p>
+        <main className="flex-grow container mx-auto px-4 py-12 flex justify-center items-center">
+          <div className="flex flex-col items-center">
+            <Loader className="w-12 h-12 text-[#2bcd82] animate-spin mb-4" />
+            <h2 className="text-xl font-semibold text-gray-700">Loading resource details...</h2>
           </div>
         </main>
         <Footer />
@@ -82,492 +383,473 @@ const ResourceDetailPage: React.FC = () => {
     );
   }
   
-  if (error || !product) {
+  if (error && !usingMockData) {
     return (
-      <div className="min-h-screen bg-gradient-to-b from-gray-50 to-gray-100 flex flex-col">
+      <div className="min-h-screen bg-gray-50 flex flex-col">
         <Header />
-        <main className="flex-grow container mx-auto px-4 py-8">
-          <button 
-            onClick={() => navigate(-1)} 
-            className="flex items-center text-gray-600 mb-6 hover:text-[#2bcd82] transition-colors"
-          >
-            <ArrowLeft className="w-5 h-5 mr-2" /> Back to Catalog
-          </button>
-          
-          <div className="bg-white rounded-2xl shadow-lg p-10 text-center max-w-2xl mx-auto border border-gray-100">
-            <p className="text-red-600 text-2xl font-medium mb-6">{error || 'Resource not found'}</p>
-            <Button 
-              onClick={() => navigate('/catalog')} 
-              className="bg-[#2bcd82] hover:bg-[#25b975] text-white px-8 py-3 rounded-xl text-lg font-medium"
+        <main className="flex-grow container mx-auto px-4 py-12">
+          <div className="bg-red-50 rounded-lg p-6 text-center max-w-2xl mx-auto">
+            <h2 className="text-red-600 text-xl font-bold mb-2">Error</h2>
+            <p className="text-red-500 mb-4">{error}</p>
+            <button 
+              onClick={() => navigate('/catalog')}
+              className="inline-flex items-center px-4 py-2 bg-[#2bcd82] text-white rounded-lg hover:bg-[#25b975] transition-colors"
             >
-              Browse Catalog
-            </Button>
+              <ArrowLeft className="w-4 h-4 mr-2" />
+              Back to Catalog
+            </button>
           </div>
         </main>
         <Footer />
       </div>
     );
   }
-
+  
+  if (!product) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex flex-col">
+        <Header />
+        <main className="flex-grow container mx-auto px-4 py-12">
+          <div className="text-center">
+            <h2 className="text-xl font-semibold text-gray-700 mb-4">Resource not found</h2>
+            <button 
+              onClick={() => navigate('/catalog')}
+              className="inline-flex items-center px-4 py-2 bg-[#2bcd82] text-white rounded-lg hover:bg-[#25b975] transition-colors"
+            >
+              <ArrowLeft className="w-4 h-4 mr-2" />
+              Back to Catalog
+            </button>
+          </div>
+        </main>
+        <Footer />
+      </div>
+    );
+  }
+  
   return (
-    <div className="min-h-screen bg-gradient-to-b from-gray-50 to-white flex flex-col">
+    <div className="min-h-screen bg-gray-50 flex flex-col">
       <Header />
       
-      <main className="flex-grow container mx-auto px-4 py-8 md:py-12">
-        <nav className="flex items-center space-x-1 text-sm text-gray-500 mb-6">
-          <a href="/" className="hover:text-[#2bcd82] transition-colors">Home</a>
-          <span>/</span>
-          <a href="/catalog" className="hover:text-[#2bcd82] transition-colors">Catalog</a>
-          <span>/</span>
-          <span className="text-gray-700 font-medium truncate max-w-[200px]">{product.name}</span>
-        </nav>
+      <main className="flex-grow container mx-auto px-4 py-8">
+        {/* Mock Data Warning */}
+        {usingMockData && (
+          <div className="bg-yellow-50 border border-yellow-200 rounded-xl p-4 mb-6 text-center">
+            <div className="flex items-center justify-center mb-2">
+              <AlertCircle className="text-yellow-500 mr-2" />
+              <p className="text-yellow-700 font-medium">Using Sample Data</p>
+            </div>
+            <p className="text-yellow-600 text-sm">
+              Unable to access the Firebase database due to permission issues. Displaying sample product information.
+            </p>
+          </div>
+        )}
         
-        <div className="bg-white rounded-2xl shadow-lg overflow-hidden border border-gray-100 mb-12">
-          <div className="flex flex-col lg:flex-row">
+        {/* Back Button */}
+        <button 
+          onClick={() => navigate('/catalog')}
+          className="mb-6 inline-flex items-center text-gray-600 hover:text-[#2bcd82] transition-colors"
+        >
+          <ArrowLeft className="w-4 h-4 mr-2" />
+          Back to Catalog
+        </button>
+        
+        {/* Product Hero Section */}
+        <div className="bg-white rounded-xl shadow-sm overflow-hidden">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-8 p-6 md:p-8">
             {/* Product Image */}
-            <div className="lg:w-2/5 bg-gray-50 relative flex items-center justify-center py-8">
-              {product.category && (
-                <span className="absolute top-4 left-4 bg-[#2bcd82]/90 text-white text-sm font-medium px-3 py-1 rounded-full z-10 backdrop-blur-sm">
-                  {product.category}
-                </span>
-              )}
-              
-              {product.thumbnail ? (
-                <div className="relative mx-auto w-[300px] max-w-full">
-                  {/* Slight 3D perspective container */}
-                  <div className="transform-gpu preserve-3d perspective-[800px] hover:rotate-y-[-5deg] transition-transform duration-500">
-                    <div className="aspect-[3/4] shadow-lg rounded-md overflow-hidden transform rotate-[-1deg] border border-gray-200 relative backface-hidden">
-                      <img 
-                        src={product.thumbnail} 
-                        alt={product.name} 
-                        className="w-full h-full object-cover object-center"
-                      />
-                      {/* Book title overlay at bottom */}
-                      <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-black/0 p-3 pt-8">
-                        <h3 className="text-white text-sm font-bold line-clamp-2">{product.name}</h3>
-                        <p className="text-white/80 text-xs mt-1">Speech Therapy Resource</p>
-                      </div>
-                      {/* Subtle page line effects */}
-                      <div className="absolute top-2 bottom-2 right-[2px] w-[1px] bg-white/30"></div>
-                      <div className="absolute top-2 bottom-2 right-[4px] w-[1px] bg-white/20"></div>
-                      <div className="absolute top-0 right-0 w-[15px] h-full bg-gradient-to-l from-black/10 to-transparent"></div>
-                    </div>
-                  </div>
-                  {/* Book spine effect */}
-                  <div className="absolute top-0 bottom-0 left-0 w-[10px] bg-[#2bcd82] rounded-l-md transform translate-x-[-2px]"></div>
-                  {/* Book shadow effect */}
-                  <div className="absolute -bottom-4 left-0 right-0 h-[20px] bg-black/20 blur-md rounded-full z-[-1]"></div>
-                </div>
+            <div className="rounded-lg overflow-hidden bg-gray-100 flex items-center justify-center min-h-[300px]">
+              {product.thumbnail || product.image || product.images?.[0]?.src ? (
+                <img 
+                  src={product.thumbnail || product.image || product.images?.[0]?.src} 
+                  alt={product.name || product.title || 'Product'} 
+                  className="w-full h-full object-contain"
+                />
               ) : (
-                <div className="mx-auto w-[300px] max-w-full aspect-[3/4] bg-gradient-to-br from-gray-100 to-gray-200 rounded-md shadow-md border border-gray-200 flex flex-col items-center justify-center p-4">
-                  <div className="w-16 h-16 rounded-full bg-gray-300 flex items-center justify-center mb-4">
-                    <BookOpen className="w-8 h-8 text-gray-400" />
-                  </div>
-                  <p className="text-gray-500 font-medium text-center">No cover available</p>
+                <div className="text-gray-400 text-center p-8">
+                  <BookOpen className="w-16 h-16 mx-auto mb-4" />
+                  <p>No preview available</p>
                 </div>
               )}
             </div>
             
-            {/* Product Details */}
-            <div className="lg:w-3/5 p-6 md:p-10 flex flex-col">
-              {/* Product Badges */}
-              <div className="flex flex-wrap gap-2 mb-4">
-                <span className="inline-block bg-blue-50 text-blue-600 text-xs font-medium px-2.5 py-1 rounded-full">New</span>
-                <span className="inline-block bg-purple-50 text-purple-600 text-xs font-medium px-2.5 py-1 rounded-full">Top Rated</span>
+            {/* Product Info */}
+            <div className="flex flex-col">
+              <h1 className="text-3xl font-bold text-gray-800 mb-2">
+                {product.name || product.title || 'Unnamed Product'}
+              </h1>
+              
+              <div className="mt-1 mb-4">
+                <span className="text-sm text-gray-500">Category: </span>
+                <span className="text-sm font-medium text-gray-700">{product.category || 'Uncategorized'}</span>
               </div>
               
-              <h1 className="text-3xl md:text-4xl font-bold text-gray-800 mb-4 leading-tight">{product.name}</h1>
-              
-              <div className="flex items-center mt-4">
-                <div className="flex">
-                  {[1, 2, 3, 4, 5].map((idx) => (
-                    <Star
-                      key={idx}
-                      className={`w-5 h-5 ${idx <= 4 ? 'text-yellow-400' : 'text-gray-300'}`}
-                      fill={idx <= 4 ? 'currentColor' : 'none'}
-                    />
-                  ))}
+              {/* PDF Indicator */}
+              {hasPdfFiles(product) && (
+                <div className="mb-4 flex items-center bg-blue-50 p-2 rounded">
+                  <FileText className="text-blue-500 mr-2 w-5 h-5" />
+                  <span className="text-blue-700 text-sm font-medium">
+                    PDF document included
+                    {!hasPurchased && !checkingPurchase && (
+                      <span className="ml-1 text-yellow-600">
+                        <LockIcon className="w-3 h-3 inline-block mr-1" />
+                        Purchase required to view
+                      </span>
+                    )}
+                  </span>
                 </div>
-                <span className="ml-2 text-gray-600">(12 reviews)</span>
+              )}
+              
+              <div className="text-2xl text-[#fb6a69] font-bold mb-4">
+                {formatCurrency(getProductPrice(product))}
               </div>
               
-              <div className="flex flex-wrap gap-6 mb-8 text-sm">
-                <div className="flex items-center">
-                  <Clock className="w-4 h-4 text-gray-400 mr-2" />
-                  <span>Created: June 2023</span>
-                </div>
-                <div className="flex items-center">
-                  <BookOpen className="w-4 h-4 text-gray-400 mr-2" />
-                  <span>12 Pages</span>
-                </div>
-                <div className="flex items-center">
-                  <Users className="w-4 h-4 text-gray-400 mr-2" />
-                  <span>1,240+ Downloads</span>
-                </div>
-              </div>
-              
-              <div className="bg-[#f8fcfa] rounded-xl p-5 mb-8 border border-[#e0f5eb]">
-                <div className="flex justify-between items-center mb-2">
-                  <span className="text-gray-700 font-medium">Price:</span>
-                  <span className="text-3xl font-bold text-[#fb6a69]">${product.price.toFixed(2)}</span>
-                </div>
-                
-                <p className="text-sm text-gray-500">
-                  One-time purchase • Instant download • No subscription required
-                </p>
-              </div>
-              
-              <div className="mb-8">
-                <h3 className="text-sm font-bold text-gray-700 uppercase tracking-wider mb-3">What's Included:</h3>
-                <ul className="space-y-3">
-                  <li className="flex items-start">
-                    <Check className="w-5 h-5 text-[#2bcd82] mr-2 mt-0.5 flex-shrink-0" />
-                    <span>High-quality downloadable PDF with printable worksheets</span>
-                  </li>
-                  <li className="flex items-start">
-                    <Check className="w-5 h-5 text-[#2bcd82] mr-2 mt-0.5 flex-shrink-0" />
-                    <span>Detailed instructions for implementation</span>
-                  </li>
-                  <li className="flex items-start">
-                    <Check className="w-5 h-5 text-[#2bcd82] mr-2 mt-0.5 flex-shrink-0" />
-                    <span>Free lifetime updates and access</span>
-                  </li>
-                </ul>
-              </div>
-              
-              <div className="flex flex-col space-y-3 mt-auto">
+              <div className="flex flex-col space-y-4 mt-auto">
                 <Button 
                   onClick={handleAddToCart}
-                  className="w-full bg-[#2bcd82] hover:bg-[#25b975] text-white px-4 py-4 rounded-xl flex items-center justify-center text-lg font-medium shadow-sm shadow-[#2bcd82]/20 transition-all hover:shadow-md"
+                  className="flex items-center justify-center bg-[#2bcd82] hover:bg-[#25b975] text-white py-3 rounded-lg"
                 >
-                  <ShoppingCart className="w-5 h-5 mr-2" />
-                  Add to Cart
+                  <ShoppingCart className="w-5 h-5 mr-2" /> Add to Cart
                 </Button>
                 
-      
+                {hasPdfFiles(product) && (
+                  <>
+                    {hasPurchased ? (
+                      <Button 
+                        onClick={handleViewPdf}
+                        className="flex items-center justify-center bg-blue-500 hover:bg-blue-600 text-white py-3 rounded-lg"
+                      >
+                        <FileText className="w-5 h-5 mr-2" /> View PDF
+                      </Button>
+                    ) : (
+                      <div className="flex flex-col items-center bg-gray-100 p-3 rounded-lg">
+                        <div className="flex items-center text-gray-600 mb-2">
+                          <LockIcon className="w-5 h-5 mr-2 text-gray-500" />
+                          <span className="font-medium">PDF Access Locked</span>
+                        </div>
+                        <p className="text-sm text-gray-500 text-center">
+                          {isLoggedIn ? 
+                            "Purchase this product to unlock PDF access" : 
+                            "Login and purchase to access PDF content"}
+                        </p>
+                      </div>
+                    )}
+                  </>
+                )}
               </div>
             </div>
           </div>
-        </div>
-        
-        {/* Product Tabs */}
-        <div className="mb-16">
-          <div className="border-b border-gray-200 mb-8">
-            <div className="flex overflow-x-auto">
+          
+          {/* Tabs */}
+          <div className="border-t border-gray-100">
+            <div className="flex border-b border-gray-100">
               <button
+                className={`flex-1 py-3 px-4 text-center text-sm font-medium ${activeTab === 'description' ? 'text-[#2bcd82] border-b-2 border-[#2bcd82]' : 'text-gray-500'}`}
                 onClick={() => setActiveTab('description')}
-                className={`px-6 py-3 font-medium text-sm whitespace-nowrap ${
-                  activeTab === 'description'
-                    ? 'border-b-2 border-[#2bcd82] text-[#2bcd82]'
-                    : 'text-gray-500 hover:text-gray-700'
-                }`}
               >
                 Description
               </button>
               <button
+                className={`flex-1 py-3 px-4 text-center text-sm font-medium ${activeTab === 'details' ? 'text-[#2bcd82] border-b-2 border-[#2bcd82]' : 'text-gray-500'}`}
                 onClick={() => setActiveTab('details')}
-                className={`px-6 py-3 font-medium text-sm whitespace-nowrap ${
-                  activeTab === 'details'
-                    ? 'border-b-2 border-[#2bcd82] text-[#2bcd82]'
-                    : 'text-gray-500 hover:text-gray-700'
-                }`}
               >
-                Resource Details
+                Details
               </button>
               <button
+                className={`flex-1 py-3 px-4 text-center text-sm font-medium ${activeTab === 'reviews' ? 'text-[#2bcd82] border-b-2 border-[#2bcd82]' : 'text-gray-500'}`}
                 onClick={() => setActiveTab('reviews')}
-                className={`px-6 py-3 font-medium text-sm whitespace-nowrap ${
-                  activeTab === 'reviews'
-                    ? 'border-b-2 border-[#2bcd82] text-[#2bcd82]'
-                    : 'text-gray-500 hover:text-gray-700'
-                }`}
               >
-                Reviews (32)
+                Reviews
               </button>
             </div>
-          </div>
-          
-          <div className="bg-white rounded-2xl p-8 shadow-sm border border-gray-100">
-            {activeTab === 'description' && (
-              <div className="prose prose-lg max-w-none">
-                <div className="bg-gray-50 p-6 rounded-xl border border-gray-100 mb-8">
-                  <p className="text-lg leading-relaxed mb-6">
-                    Have you chosen "shr" words using the Complexity Approach and need more homework sheets and therapy activities that not only keep kids interested, but have high practice trials on each page? If you've always wanted to quickly print a board game, go through some word lists, and have play-based ideas at your fingertips with something NEW for an entire block of therapy without using the same activity twice, this is the packet for you!
-                  </p>
-                  
-                  <h3 className="text-xl font-bold text-gray-800 mb-4">DOWNLOAD THIS RESOURCE IF YOU WANT:</h3>
-                  <ul className="space-y-3 mb-6">
-                    <li className="flex items-start">
-                      <span className="flex-shrink-0 flex items-center justify-center w-7 h-7 rounded-full bg-[#2bcd82] text-white font-medium mr-3 mt-0.5">❶</span>
-                      <span>High-practice trial therapy worksheets for Complexity Approach intervention</span>
-                    </li>
-                    <li className="flex items-start">
-                      <span className="flex-shrink-0 flex items-center justify-center w-7 h-7 rounded-full bg-[#2bcd82] text-white font-medium mr-3 mt-0.5">❷</span>
-                      <span>A wide variety of activities for therapy sessions so children won't get bored, including less structured, play-based ideas</span>
-                    </li>
-                    <li className="flex items-start">
-                      <span className="flex-shrink-0 flex items-center justify-center w-7 h-7 rounded-full bg-[#2bcd82] text-white font-medium mr-3 mt-0.5">❸</span>
-                      <span>Chaining strategies to elicit the cluster before getting into high-practice trials</span>
-                    </li>
-                    <li className="flex items-start">
-                      <span className="flex-shrink-0 flex items-center justify-center w-7 h-7 rounded-full bg-[#2bcd82] text-white font-medium mr-3 mt-0.5">❹</span>
-                      <span>An evidence-based resource that outlines general therapy steps for the Complexity Approach</span>
-                    </li>
-                    <li className="flex items-start">
-                      <span className="flex-shrink-0 flex items-center justify-center w-7 h-7 rounded-full bg-[#2bcd82] text-white font-medium mr-3 mt-0.5">❺</span>
-                      <span>Color and black & white cards, games, activities, and homework word lists to support your intervention- something for every child's interests</span>
-                    </li>
-                  </ul>
-                </div>
-                
-                <h3 className="text-xl font-bold text-gray-800 mb-4">EACH PACKET INCLUDES:</h3>
-                <div className="bg-white border border-gray-200 rounded-xl mb-8">
-                  <ul className="divide-y divide-gray-100">
-                    <li className="p-4">Over <span className="font-semibold">55 functional pages</span> targeting "shr" complex clusters – x26 color pages and x31 black & white options</li>
-                    <li className="p-4">Includes <span className="font-semibold">therapy steps handout</span></li>
-                    <li className="p-4"><span className="font-semibold">Full-size Flashcards</span> featuring x9 words</li>
-                    <li className="p-4"><span className="font-semibold">Mini Flashcards</span> x5 per target word (total = 45 mini cards)</li>
-                    <li className="p-4"><span className="font-semibold">Forward and backward chaining pages</span> to help elicit the complex target</li>
-                    <li className="p-4"><span className="font-semibold">Play-based ideas</span> for each target word</li>
-                    <li className="p-4">
-                      <span className="font-semibold">Gameboards:</span> x4 to use dice and counters to play these games
-                    </li>
-                    <li className="p-4">
-                      <span className="font-semibold">High Practice pages:</span>
-                      <ul className="mt-2 grid grid-cols-1 sm:grid-cols-2 gap-2 pl-4">
-                        <li>Stamp & Say x2</li>
-                        <li>Draw & Say x2</li>
-                        <li>Find & Say x1</li>
-                        <li>Spin & Say x1</li>
-                        <li>Pop & Say x4</li>
-                        <li>100 Practices x2</li>
-                      </ul>
-                    </li>
-                    <li className="p-4"><span className="font-semibold">Weekly Word lists</span> x4 with fun designs for easy home practice</li>
-                    <li className="p-4"><span className="font-semibold">Cut, Paste & Say</span> x5 craft pages</li>
-                  </ul>
-                </div>
-                
-                <div className="bg-[#f0f9f4] border border-[#c8ebda] p-6 rounded-xl mb-8">
-                  <h3 className="text-xl font-bold text-gray-800 mb-3">MORE RESOURCES</h3>
-                  <p className="mb-4">GET OUR 2-ELEMENT BUNDLE featuring "sl", "fl", "fr", "thr" and "shr" <a href="/catalog" className="text-[#2bcd82] font-medium hover:underline">here</a></p>
-                  <p className="mb-4">Do you need FREE 100 Trials for Speech no-prep worksheets? Sign up for my newsletter to get access to my Freebie Library of goodies that are aimed at your speech sound caseload.</p>
-                </div>
-                
-                <h3 className="text-xl font-bold text-gray-800 mb-3">ABOUT THE AUTHOR:</h3>
-                <p className="mb-6">
-                  Rebecca Reinking is an SLP who works privately with children who have speech sound disorders. She has a particular interest in phonological interventions and strives to connect and collaborate with speech scientists to bridge the gap between research and clinical practice.
-                </p>
-                
             
-                
-                <p className="text-gray-600 leading-relaxed mt-4">
-                  This resource is perfect for speech-language pathologists working with clients 
-                  who need assistance with articulation, language development, or cognitive skills. 
-                  The materials are designed to be engaging and effective, created by experienced SLPs.
-                </p>
-              </div>
-            )}
-            
-            {activeTab === 'details' && (
-              <div>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <div>
-                    <h3 className="text-sm font-bold text-gray-700 uppercase tracking-wider mb-3">Resource Specifications</h3>
-                    <div className="space-y-3">
-                      <div className="flex justify-between border-b border-gray-100 pb-2">
-                        <span className="text-gray-600">Format</span>
-                        <span className="font-medium">PDF</span>
+            {/* Tab Content */}
+            <div className="p-6">
+              {activeTab === 'description' && (
+                <div className="description-container">
+                  {product.content || product.description ? (
+                    <div className="prose prose-slate max-w-none">
+                      <div className="bg-gray-50 p-6 rounded-xl border border-gray-100 mb-6">
+                        {product.content ? (
+                          <div className="prose-img:rounded-lg prose-img:mx-auto prose-headings:text-gray-800 prose-p:text-gray-600 prose-a:text-blue-500 prose-strong:text-gray-800" dangerouslySetInnerHTML={{ __html: product.content }} />
+                        ) : product.description ? (
+                          <div>
+                            {containsHtml(product.description) ? (
+                              <div className="prose-img:rounded-lg prose-img:mx-auto prose-headings:text-gray-800 prose-p:text-gray-600 prose-a:text-blue-500 prose-strong:text-gray-800" dangerouslySetInnerHTML={{ __html: product.description }} />
+                            ) : (
+                              <>
+                                {product.description.split('\n').map((paragraph, index) => (
+                                  <p key={index} className="mb-4 text-gray-600">{paragraph}</p>
+                                ))}
+                              </>
+                            )}
+                          </div>
+                        ) : null}
                       </div>
-                      <div className="flex justify-between border-b border-gray-100 pb-2">
-                        <span className="text-gray-600">Pages</span>
-                        <span className="font-medium">12</span>
+                      
+                      {/* Additional info and formatting enhancements */}
+                      {product.details && Object.keys(product.details).length > 0 && (
+                        <div className="bg-indigo-50 p-4 rounded-lg mb-6">
+                          <h3 className="text-lg font-bold text-indigo-700 mb-3">Additional Information</h3>
+                          <ul className="space-y-2">
+                            {Object.entries(product.details).map(([key, value]) => {
+                              // Skip if the value is null, undefined, or an object
+                              if (value === null || value === undefined || typeof value === 'object') return null;
+                              
+                              // Format the key for display
+                              const formattedKey = key
+                                .replace(/([A-Z])/g, ' $1') // Add space before capital letters
+                                .replace(/^./, str => str.toUpperCase()); // Capitalize first letter
+                              
+                              return (
+                                <li key={key} className="flex items-start">
+                                  <div className="bg-indigo-100 p-1 rounded-full mr-2 mt-1">
+                                    <Info className="w-3 h-3 text-indigo-600" />
+                                  </div>
+                                  <div>
+                                    <span className="font-medium text-indigo-800">{formattedKey}: </span>
+                                    <span className="text-indigo-700">{String(value)}</span>
+                                  </div>
+                                </li>
+                              );
+                            })}
+                          </ul>
+                        </div>
+                      )}
+                      
+                      {/* Category information */}
+                      {product.category && (
+                        <div className="flex items-center mb-6 bg-blue-50 p-3 rounded-lg">
+                          <Tag className="text-blue-500 w-5 h-5 mr-2" />
+                          <p className="text-blue-700">
+                            <span className="font-medium">Category:</span> {product.category}
+                          </p>
+                        </div>
+                      )}
+
+                      {/* Key Benefits Section */}
+                      <div className="mb-8">
+                        <h3 className="text-xl font-bold text-gray-800 mb-4 flex items-center">
+                          <CheckCircle className="text-[#2bcd82] w-5 h-5 mr-2" />
+                          Key Benefits
+                        </h3>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          <div className="bg-white p-4 rounded-lg border border-gray-100 flex items-start">
+                            <div className="bg-[#2bcd82]/10 p-2 rounded-full mr-3">
+                              <Check className="w-4 h-4 text-[#2bcd82]" />
+                            </div>
+                            <div>
+                              <p className="text-gray-700">Easy-to-use resources for immediate implementation</p>
+                            </div>
+                          </div>
+                          <div className="bg-white p-4 rounded-lg border border-gray-100 flex items-start">
+                            <div className="bg-[#2bcd82]/10 p-2 rounded-full mr-3">
+                              <Check className="w-4 h-4 text-[#2bcd82]" />
+                            </div>
+                            <div>
+                              <p className="text-gray-700">Evidence-based materials created by specialists</p>
+                            </div>
+                          </div>
+                          <div className="bg-white p-4 rounded-lg border border-gray-100 flex items-start">
+                            <div className="bg-[#2bcd82]/10 p-2 rounded-full mr-3">
+                              <Check className="w-4 h-4 text-[#2bcd82]" />
+                            </div>
+                            <div>
+                              <p className="text-gray-700">Engaging activities that maintain client interest</p>
+                            </div>
+                          </div>
+                          <div className="bg-white p-4 rounded-lg border border-gray-100 flex items-start">
+                            <div className="bg-[#2bcd82]/10 p-2 rounded-full mr-3">
+                              <Check className="w-4 h-4 text-[#2bcd82]" />
+                            </div>
+                            <div>
+                              <p className="text-gray-700">Save time with ready-to-use materials</p>
+                            </div>
+                          </div>
+                        </div>
                       </div>
-                      <div className="flex justify-between border-b border-gray-100 pb-2">
-                        <span className="text-gray-600">Age Range</span>
-                        <span className="font-medium">5-12 years</span>
+                      
+                      {/* Who this is for section */}
+                      <div className="bg-blue-50 p-5 rounded-xl border border-blue-100 mb-6">
+                        <h3 className="text-lg font-bold text-blue-800 mb-3 flex items-center">
+                          <Users className="w-5 h-5 mr-2 text-blue-500" />
+                          Who This Resource is For
+                        </h3>
+                        <p className="text-blue-700 mb-3">
+                          This resource is ideal for speech-language pathologists, special education teachers, and interventionists working with:
+                        </p>
+                        <ul className="list-disc pl-6 text-blue-700 space-y-1">
+                          <li>School-aged children with speech and language needs</li>
+                          <li>Clients requiring structured therapy materials</li>
+                          <li>Students needing engaging practice activities</li>
+                        </ul>
                       </div>
-                      <div className="flex justify-between border-b border-gray-100 pb-2">
-                        <span className="text-gray-600">Created</span>
-                        <span className="font-medium">June 2023</span>
+                      
+                      {!hasPurchased && hasPdfFiles(product) && (
+                        <div className="bg-yellow-50 p-5 rounded-xl border border-yellow-100">
+                          <div className="flex items-center mb-2">
+                            <Info className="text-yellow-600 w-5 h-5 mr-2" />
+                            <h3 className="text-lg font-bold text-yellow-800">PDF Access</h3>
+                          </div>
+                          <p className="text-yellow-700 mb-2">
+                            This product includes PDF materials that are accessible after purchase.
+                          </p>
+                          <p className="text-yellow-600 text-sm">
+                            Purchase now to unlock all content and resources included with this product.
+                          </p>
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    <div className="bg-gray-50 p-6 rounded-xl">
+                      <p className="text-gray-600">{product.description || 'No description available.'}</p>
+                    </div>
+                  )}
+                </div>
+              )}
+              
+              {activeTab === 'details' && (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {product.details?.difficulty && (
+                    <div className="flex items-start">
+                      <div className="bg-gray-100 p-2 rounded-full mr-3">
+                        <Star className="w-5 h-5 text-gray-500" />
                       </div>
-                      <div className="flex justify-between border-b border-gray-100 pb-2">
-                        <span className="text-gray-600">Last Updated</span>
-                        <span className="font-medium">July 2023</span>
+                      <div>
+                        <h3 className="text-sm font-medium text-gray-800">Difficulty</h3>
+                        <p className="text-sm text-gray-600">{product.details.difficulty}</p>
                       </div>
                     </div>
-                  </div>
+                  )}
                   
-                  <div>
-                    <h3 className="text-sm font-bold text-gray-700 uppercase tracking-wider mb-3">Target Areas</h3>
-                    <div className="flex flex-wrap gap-2">
-                      <span className="px-3 py-1 rounded-full text-sm bg-gray-100 text-gray-800">Articulation</span>
-                      <span className="px-3 py-1 rounded-full text-sm bg-gray-100 text-gray-800">Phonology</span>
-                      <span className="px-3 py-1 rounded-full text-sm bg-gray-100 text-gray-800">Language</span>
-                      <span className="px-3 py-1 rounded-full text-sm bg-gray-100 text-gray-800">Fluency</span>
-                      <span className="px-3 py-1 rounded-full text-sm bg-gray-100 text-gray-800">Pragmatics</span>
+                  {product.details?.duration && (
+                    <div className="flex items-start">
+                      <div className="bg-gray-100 p-2 rounded-full mr-3">
+                        <Clock className="w-5 h-5 text-gray-500" />
+                      </div>
+                      <div>
+                        <h3 className="text-sm font-medium text-gray-800">Duration</h3>
+                        <p className="text-sm text-gray-600">{product.details.duration}</p>
+                      </div>
                     </div>
-                  </div>
-                </div>
-              </div>
-            )}
-            
-            {activeTab === 'reviews' && (
-              <div>
-                <div className="flex items-center justify-between mb-6">
-                  <div>
-                    <h3 className="text-xl font-bold text-gray-800">Customer Reviews</h3>
-                    <div className="flex items-center mt-1">
-                      <div className="flex">
-                        {[1, 2, 3, 4, 5].map((star) => (
-                          <Star 
-                            key={star} 
-                            className={`w-5 h-5 ${star <= 5 ? 'text-yellow-400 fill-yellow-400' : 'text-gray-300'}`} 
-                          />
+                  )}
+                  
+                  {product.details?.ageRange && (
+                    <div className="flex items-start">
+                      <div className="bg-gray-100 p-2 rounded-full mr-3">
+                        <Users className="w-5 h-5 text-gray-500" />
+                      </div>
+                      <div>
+                        <h3 className="text-sm font-medium text-gray-800">Age Range</h3>
+                        <p className="text-sm text-gray-600">{product.details.ageRange}</p>
+                      </div>
+                    </div>
+                  )}
+                  
+                  {product.details?.targetAudience && (
+                    <div className="flex items-start">
+                      <div className="bg-gray-100 p-2 rounded-full mr-3">
+                        <Users className="w-5 h-5 text-gray-500" />
+                      </div>
+                      <div>
+                        <h3 className="text-sm font-medium text-gray-800">Target Audience</h3>
+                        <p className="text-sm text-gray-600">{product.details.targetAudience}</p>
+                      </div>
+                    </div>
+                  )}
+                  
+                  {/* Display downloads if available */}
+                  {product.downloads && product.downloads.length > 0 && (
+                    <div className="col-span-1 md:col-span-2 mt-4">
+                      <h3 className="text-sm font-medium text-gray-800 mb-2">Included Files</h3>
+                      <div className="space-y-2">
+                        {product.downloads.map((download, index) => (
+                          <div key={index} className="flex items-center justify-between bg-gray-50 p-2 rounded">
+                            <div className="flex items-center">
+                              <FileText className="w-4 h-4 text-blue-500 mr-2" />
+                              <span className="text-sm">{download.name}</span>
+                            </div>
+                            <div className="flex items-center">
+                              <span className="text-xs text-gray-500 mr-2">
+                                {download.file.split('.').pop()?.toUpperCase()}
+                              </span>
+                              {download.file.toLowerCase().endsWith('.pdf') && !hasPurchased && (
+                                <LockIcon className="w-3 h-3 text-gray-400" />
+                              )}
+                            </div>
+                          </div>
                         ))}
                       </div>
-                      <span className="ml-2 text-gray-600">4.9 out of 5 (32 reviews)</span>
-                    </div>
-                  </div>
-                  
-                  <Button className="bg-gray-100 hover:bg-gray-200 text-gray-800 px-4 py-2 rounded-lg text-sm">
-                    Write a Review
-                  </Button>
-                </div>
-                
-                <div className="space-y-6">
-                  {/* Sample review items */}
-                  <div className="pb-6 border-b border-gray-100">
-                    <div className="flex items-center mb-3">
-                      <div className="w-10 h-10 rounded-full bg-[#2bcd82]/20 text-[#2bcd82] flex items-center justify-center font-medium">
-                        JD
-                      </div>
-                      <div className="ml-3">
-                        <h4 className="font-medium text-gray-800">Jane Doe, SLP</h4>
-                        <div className="flex items-center">
-                          <div className="flex">
-                            {[1, 2, 3, 4, 5].map((_, idx) => (
-                              <Star 
-                                key={idx} 
-                                className={`w-4 h-4 ${idx < 4 ? 'text-yellow-400 fill-yellow-400' : 'text-gray-300'}`} 
-                              />
-                            ))}
-                          </div>
-                          <span className="ml-2 text-xs text-gray-500">2 months ago</span>
+                      
+                      {!hasPurchased && (
+                        <div className="mt-4 p-3 bg-gray-50 rounded-lg border border-gray-200 text-center">
+                          <p className="text-sm text-gray-600 flex items-center justify-center">
+                            <LockIcon className="w-4 h-4 mr-2 text-gray-400" />
+                            Purchase required to access these files
+                          </p>
                         </div>
-                      </div>
+                      )}
                     </div>
-                    <p className="text-gray-600">
-                      This resource has been incredibly helpful in my therapy sessions. The worksheets are 
-                      engaging and my young clients love them. Would highly recommend!
-                    </p>
-                  </div>
-                  
-                  <div className="pb-6 border-b border-gray-100">
-                    <div className="flex items-center mb-3">
-                      <div className="w-10 h-10 rounded-full bg-[#2bcd82]/20 text-[#2bcd82] flex items-center justify-center font-medium">
-                        MS
-                      </div>
-                      <div className="ml-3">
-                        <h4 className="font-medium text-gray-800">Mark Smith</h4>
-                        <div className="flex items-center">
-                          <div className="flex">
-                            {[1, 2, 3, 4, 5].map((_, idx) => (
-                              <Star 
-                                key={idx} 
-                                className={`w-4 h-4 ${idx < 4 ? 'text-yellow-400 fill-yellow-400' : 'text-gray-300'}`} 
-                              />
-                            ))}
-                          </div>
-                          <span className="ml-2 text-xs text-gray-500">3 months ago</span>
-                        </div>
-                      </div>
-                    </div>
-                    <p className="text-gray-600">
-                      Good quality resources but would appreciate more variety. The PDF prints well and the instructions are clear.
-                    </p>
-                  </div>
+                  )}
                 </div>
-                
-                <div className="mt-6 text-center">
-                  <Button className="bg-gray-100 hover:bg-gray-200 text-gray-800 px-6 py-2 rounded-lg text-sm">
-                    Load More Reviews
-                  </Button>
+              )}
+              
+              {activeTab === 'reviews' && (
+                <div className="text-center py-6">
+                  <p className="text-gray-500">No reviews yet.</p>
                 </div>
-              </div>
-            )}
+              )}
+            </div>
           </div>
         </div>
         
-        {/* Related Resources */}
-        <div className="mb-12">
-          <div className="flex items-center justify-between mb-6">
-            <h2 className="text-2xl font-bold text-gray-800">Related Resources</h2>
-            <Button 
-              onClick={() => navigate('/catalog')} 
-              className="bg-[#fb6a69] hover:bg-[#e05958] text-white font-medium px-6 py-3 rounded-lg transition-colors"
-            >
-              View All
-            </Button>
-          </div>
-          
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-            {featuredProducts.filter(item => item.id !== product.id).slice(0, 3).map((relatedProduct) => (
-              <div 
-                key={relatedProduct.id} 
-                className="bg-white rounded-xl overflow-hidden shadow-sm hover:shadow-md transition-all duration-300 flex flex-col h-full border border-gray-100 group cursor-pointer"
-                onClick={() => navigate(`/resource/${relatedProduct.id}`)}
-              >
-                <div className="relative h-48 overflow-hidden bg-gray-100">
-                  {relatedProduct.thumbnail ? (
-                    <img 
-                      src={relatedProduct.thumbnail} 
-                      alt={relatedProduct.name} 
-                      className="w-full h-full object-cover transition-transform group-hover:scale-105 duration-300"
-                    />
-                  ) : (
-                    <div className="flex items-center justify-center h-full bg-gray-200">
-                      <p className="text-gray-400">No image</p>
-                    </div>
-                  )}
-                  
-                  {relatedProduct.category && (
-                    <span className="absolute top-3 left-3 bg-black/60 text-white text-xs px-2 py-1 rounded-md backdrop-blur-sm">
-                      {relatedProduct.category}
-                    </span>
-                  )}
-                </div>
-                
-                <div className="p-5 flex flex-col flex-grow">
-                  <h3 className="text-lg font-bold text-gray-800 mb-2 group-hover:text-[#2bcd82] transition-colors">
-                    {relatedProduct.name}
-                  </h3>
-                  
-                  <p className="text-gray-600 mb-4 text-sm line-clamp-2 flex-grow">
-                    {relatedProduct.description}
-                  </p>
-                  
-                  <div className="mt-auto flex items-center justify-between">
-                    <span className="text-[#fb6a69] font-bold">${relatedProduct.price.toFixed(2)}</span>
-                    
-                    <div className="flex items-center">
-                      <div className="flex">
-                        {[1, 2, 3, 4, 5].map((star) => (
-                          <Star 
-                            key={star} 
-                            className="w-3 h-3 text-yellow-400 fill-yellow-400" 
-                          />
-                        ))}
+        {/* Related Products */}
+        {relatedProducts.length > 0 && (
+          <div className="mt-12">
+            <h2 className="text-2xl font-bold text-gray-800 mb-6">Related Products</h2>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              {relatedProducts.map(relatedProduct => (
+                <div 
+                  key={relatedProduct.id}
+                  onClick={() => navigate(`/catalog/${relatedProduct.id}`)}
+                  className="bg-white cursor-pointer rounded-xl overflow-hidden shadow-sm hover:shadow-md transition-all duration-300 flex flex-col"
+                >
+                  <div className="h-40 overflow-hidden bg-gray-100">
+                    {relatedProduct.thumbnail || relatedProduct.image || relatedProduct.images?.[0]?.src ? (
+                      <img 
+                        src={relatedProduct.thumbnail || relatedProduct.image || relatedProduct.images?.[0]?.src}
+                        alt={relatedProduct.name || relatedProduct.title || 'Related Product'} 
+                        className="w-full h-full object-cover transition-transform hover:scale-105 duration-300"
+                      />
+                    ) : (
+                      <div className="flex items-center justify-center h-full bg-gray-200">
+                        <p className="text-gray-400">No image</p>
                       </div>
-                      <span className="text-xs text-gray-500 ml-1">(24)</span>
-                    </div>
+                    )}
+                  </div>
+                  
+                  <div className="p-4 flex-grow flex flex-col">
+                    <h3 className="font-medium text-gray-800 mb-2">
+                      {relatedProduct.name || relatedProduct.title || 'Unnamed Product'}
+                    </h3>
+                    <p className="text-[#fb6a69] font-bold mt-auto">
+                      {formatCurrency(getProductPrice(relatedProduct))}
+                    </p>
                   </div>
                 </div>
-              </div>
-            ))}
+              ))}
+            </div>
           </div>
-        </div>
+        )}
       </main>
+      
+      {/* Add the PDF viewer */}
+      {isPdfViewerVisible && pdfDetails && resourceId && (
+        <SecurePdfViewer
+          productId={resourceId}
+          onClose={handleClosePdfViewer}
+          pdfDetails={pdfDetails}
+        />
+      )}
       
       <Footer />
     </div>

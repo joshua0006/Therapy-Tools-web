@@ -26,6 +26,7 @@ import SignUpPage from './components/SignUpPage'
 import UserSettingsPage from './components/UserSettingsPage'
 import ThankYouPage from './components/ThankYouPage'
 
+
 // Error boundary component to catch errors
 class ErrorBoundaryComponent extends React.Component<
   { children: React.ReactNode },
@@ -114,6 +115,7 @@ const App: React.FC = () => {
                     <Route path="/settings" element={<UserSettingsPage />} />
                     <Route path="/api-test" element={<ApiTestPage />} />
                     <Route path="/thankyou" element={<ThankYouPage />} />
+                 
                   </Routes>
                 </Suspense>
               </Router>
