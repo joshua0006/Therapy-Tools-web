@@ -250,17 +250,10 @@ const SecurePdfViewer: React.FC<SecurePdfViewerProps> = ({ productId, onClose, p
                 className="absolute top-0 left-0 right-0 bg-gray-800 text-white z-30 flex items-center px-4"
                 style={{ height: '40px' }}
               >
-                <div className="flex items-center">
-                  <FileText size={16} className="mr-2" />
-                  <span className="text-sm">{productName}</span>
-                </div>
+                
               </div>
               
-              {/* Watermark */}
-              <div className="absolute bottom-4 right-4 bg-black/70 text-white text-xs py-1 px-3 rounded-full flex items-center pointer-events-none" style={{ zIndex: 40 }}>
-                <Eye size={12} className="mr-1" />
-                <span>View Only • No Downloads</span>
-              </div>
+              
             </div>
           )}
         </div>

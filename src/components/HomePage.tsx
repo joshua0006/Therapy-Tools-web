@@ -1,13 +1,40 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Header from './Header';
 import Footer from './Footer';
 import Button from './Button';
-import { BookOpen, Users, GraduationCap, Award, Download, ShoppingBag, ChevronLeft, ChevronRight, Clock, MapPin, ExternalLink } from 'lucide-react';
+import { BookOpen, Users, GraduationCap, Award, Download, ShoppingBag, ChevronLeft, ChevronRight, Clock, MapPin, ExternalLink, FileText, Tag } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useWooCommerce } from '../context/WooCommerceContext';
 import { useEventsNews } from '../context/EventsNewsContext';
 import { formatCurrency, formatDate } from '../utils/formatters';
+
+// This creates a fake original price that's 10-20% higher than the actual price
+const calculateOriginalPrice = (actualPrice: number): number => {
+  // Random discount between 10% and 20%
+  const discountPercentage = Math.floor(Math.random() * 11) + 10; // 10-20
+  
+  // Calculate the "original" price
+  const originalPrice = actualPrice * (100 / (100 - discountPercentage));
+  
+  // Round to 2 decimal places
+  return Math.round(originalPrice * 100) / 100;
+};
+
+// Helper to get product price regardless of format
+const getProductPrice = (product: any): number => {
+  if (typeof product.price === 'number') {
+    return product.price;
+  } else if (typeof product.price === 'string') {
+    return parseFloat(product.price) || 0;
+  }
+  return 0;
+};
+
+// Calculate the discount percentage for a product
+const getDiscountPercentage = (actualPrice: number, originalPrice: number): number => {
+  return Math.round(((originalPrice - actualPrice) / originalPrice) * 100);
+};
 
 // Skeleton Loaders
 const CarouselSkeleton = () => (
@@ -19,8 +46,6 @@ const CarouselSkeleton = () => (
     </div>
   </div>
 );
-
-
 
 const HomePage: React.FC = () => {
   const { isLoggedIn } = useAuth();
@@ -40,6 +65,18 @@ const HomePage: React.FC = () => {
   
   // Use events for the carousel instead of products
   const carouselEvents = events.slice(0, 4);
+
+  // Create a mapping of product IDs to their "original" prices
+  const originalPrices = useMemo(() => {
+    const priceMap: Record<string, number> = {};
+    
+    featuredProducts.forEach((product) => {
+      const productPrice = getProductPrice(product);
+      priceMap[product.id] = calculateOriginalPrice(productPrice);
+    });
+    
+    return priceMap;
+  }, [featuredProducts]);
 
   // Mark page as loaded once data is ready
   useEffect(() => {
@@ -226,43 +263,7 @@ const HomePage: React.FC = () => {
         </div>
       </div>
 
-      {/* Member Benefits */}
-      <div className="py-16 bg-gray-100">
-        <div className="container mx-auto px-4">
-          <h2 className="text-3xl font-bold text-center text-gray-800 mb-4">
-            Why Join Our <span className="text-[#fb6a69]">Membership</span>?
-          </h2>
-          <p className="text-center text-gray-600 max-w-3xl mx-auto mb-12">
-            Save time and money with unlimited access to our growing library of premium speech therapy catalogs.
-          </p>
-          
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-            {[
-              {
-                title: "Professional Catalogs",
-                description: "Access our extensive library of worksheets, activities, and evidence-based materials.",
-                icon: <BookOpen className="w-10 h-10 text-[#2bcd82]" />
-              },
-              {
-                title: "Community Support",
-                description: "Connect with fellow speech pathologists to share ideas and get support.",
-                icon: <Users className="w-10 h-10 text-[#2bcd82]" />
-              },
-              {
-                title: "Continuing Education",
-                description: "Stay updated with the latest research and techniques in speech pathology.",
-                icon: <GraduationCap className="w-10 h-10 text-[#2bcd82]" />
-              }
-            ].map((benefit, index) => (
-              <div key={index} className="bg-white p-8 rounded-lg shadow-md hover:shadow-lg transition-shadow border border-gray-100">
-                <div className="mb-4">{benefit.icon}</div>
-                <h3 className="text-xl font-bold text-[#2bcd82] mb-3">{benefit.title}</h3>
-                <p className="text-gray-600">{benefit.description}</p>
-              </div>
-            ))}
-          </div>
-        </div>
-      </div>
+     
 
       {/* Featured Products */}
       <div className="py-16 bg-white">
@@ -277,36 +278,71 @@ const HomePage: React.FC = () => {
             </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-              {featuredProducts.map((product) => (
-                <div 
-                  key={product.id} 
-                  className="bg-white rounded-lg shadow-md overflow-hidden cursor-pointer transition-transform hover:scale-105"
-                  onClick={() => navigate(`/catalog/${product.id}`)}
-                >
-                  <div className="h-48 overflow-hidden">
-                    <img 
-                      src={product.thumbnail || "https://images.unsplash.com/photo-1503676260728-1c00da094a0b?ixlib=rb-1.2.1&auto=format&fit=crop&w=800&q=80"} 
-                      alt={product.name} 
-                      className="w-full h-full object-cover transition-transform hover:scale-105"
-                    />
-                  </div>
-                  <div className="p-4">
-                    <h3 className="text-lg font-bold text-gray-800 mb-2">{product.name}</h3>
-                    <div className="flex justify-between items-center">
-                      <span className="text-lg font-bold text-[#fb6a69]">{formatCurrency(product.price)}</span>
-                      <button 
-                        className="bg-[#2bcd82] hover:bg-[#25b975] text-white font-medium py-1 px-4 rounded-full"
-                        onClick={(e) => {
-                          e.stopPropagation(); // Prevent triggering the parent card's onClick
-                          navigate(`/catalog/${product.id}`);
-                        }}
-                      >
-                        View Details
-                      </button>
+              {featuredProducts.map((product) => {
+                const actualPrice = getProductPrice(product);
+                return (
+                  <div 
+                    key={product.id} 
+                    className="bg-white rounded-lg shadow-md overflow-hidden cursor-pointer transition-transform hover:scale-105"
+                    onClick={() => navigate(`/catalog/${product.id}`)}
+                  >
+                    <div className="h-48 overflow-hidden relative">
+                      <img 
+                        src={product.thumbnail || "https://images.unsplash.com/photo-1503676260728-1c00da094a0b?ixlib=rb-1.2.1&auto=format&fit=crop&w=800&q=80"} 
+                        alt={product.name} 
+                        className="w-full h-full object-cover transition-transform hover:scale-105"
+                      />
+                      
+                      {/* Sale Tag */}
+                      {actualPrice > 0 ? (
+                        <div className="absolute top-0 right-0 bg-[#fb6a69] text-white px-3 py-1 rounded-bl-lg text-sm font-bold flex items-center">
+                          <Tag className="w-4 h-4 mr-1" />
+                          {getDiscountPercentage(actualPrice, originalPrices[product.id])}% OFF
+                        </div>
+                      ) : (
+                        <div className="absolute top-0 right-0 bg-[#2bcd82] text-white px-3 py-1 rounded-bl-lg text-sm font-bold flex items-center">
+                          <Tag className="w-4 h-4 mr-1" />
+                          FREE
+                        </div>
+                      )}
+                    </div>
+                    <div className="p-4">
+                      <h3 className="text-lg font-bold text-gray-800 mb-2">{product.name}</h3>
+                      <div className="flex justify-between items-center">
+                        <div className="flex flex-col">
+                          {actualPrice > 0 ? (
+                            <>
+                              {/* Original Price (crossed out) */}
+                              <span className="text-gray-500 line-through text-sm">
+                                {formatCurrency(originalPrices[product.id])}
+                              </span>
+                              
+                              {/* Sale Price */}
+                              <span className="text-[#fb6a69] font-bold text-lg">
+                                {formatCurrency(actualPrice)}
+                              </span>
+                            </>
+                          ) : (
+                            /* Free Product Price */
+                            <span className="text-[#2bcd82] font-bold text-lg">
+                              Free
+                            </span>
+                          )}
+                        </div>
+                        <button 
+                          className="bg-[#2bcd82] hover:bg-[#25b975] text-white font-medium py-1 px-4 rounded-full"
+                          onClick={(e) => {
+                            e.stopPropagation(); // Prevent triggering the parent card's onClick
+                            navigate(`/catalog/${product.id}`);
+                          }}
+                        >
+                          View Details
+                        </button>
+                      </div>
                     </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
           
@@ -432,7 +468,43 @@ const HomePage: React.FC = () => {
           </div>
         </div>
       </section>
-
+ {/* Member Benefits */}
+ <div className="py-16 bg-gray-100">
+        <div className="container mx-auto px-4">
+          <h2 className="text-3xl font-bold text-center text-gray-800 mb-4">
+            Why Join Our <span className="text-[#fb6a69]">Membership</span>?
+          </h2>
+          <p className="text-center text-gray-600 max-w-3xl mx-auto mb-12">
+            Save time and money with unlimited access to our growing library of premium speech therapy catalogs.
+          </p>
+          
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+            {[
+              {
+                title: "Professional Catalogs",
+                description: "Access our extensive library of worksheets, activities, and evidence-based materials.",
+                icon: <BookOpen className="w-10 h-10 text-[#2bcd82]" />
+              },
+              {
+                title: "Community Support",
+                description: "Connect with fellow speech pathologists to share ideas and get support.",
+                icon: <Users className="w-10 h-10 text-[#2bcd82]" />
+              },
+              {
+                title: "Continuing Education",
+                description: "Stay updated with the latest research and techniques in speech pathology.",
+                icon: <GraduationCap className="w-10 h-10 text-[#2bcd82]" />
+              }
+            ].map((benefit, index) => (
+              <div key={index} className="bg-white p-8 rounded-lg shadow-md hover:shadow-lg transition-shadow border border-gray-100">
+                <div className="mb-4">{benefit.icon}</div>
+                <h3 className="text-xl font-bold text-[#2bcd82] mb-3">{benefit.title}</h3>
+                <p className="text-gray-600">{benefit.description}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
       {/* Testimonials */}
       <div className="bg-gradient-to-br from-[#fb6a69]/5 to-[#2bcd82]/5 py-20">
         <div className="container mx-auto px-4">

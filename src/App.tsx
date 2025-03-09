@@ -16,7 +16,6 @@ import { WooCommerceProvider } from './context/WooCommerceContext'
 import { EventsNewsProvider } from './context/EventsNewsContext'
 import { Toaster } from 'react-hot-toast'
 import Cart from './components/Cart'
-import MonthlyArticlesPage from './components/MonthlyArticlesPage'
 import PrivacyPolicyPage from './components/PrivacyPolicyPage'
 import UserPurchasesPage from './components/UserPurchasesPage'
 import SignIn from './components/SignIn'
@@ -107,7 +106,6 @@ const App: React.FC = () => {
                     <Route path="/purchases" element={<UserPurchasesPage />} />
                     <Route path="/catalog/:resourceId" element={<ResourceDetailPage />} />
                     <Route path="/events-news" element={<EventsNewsPage />} />
-                    <Route path="/monthly-articles" element={<MonthlyArticlesPage />} />
                     <Route path="/privacy" element={<PrivacyPolicyPage />} />
                     <Route path="/terms" element={<TermsOfUsePage />} />
                     <Route path="/signin" element={<SignIn />} />

@@ -48,9 +48,11 @@ interface BillingAddress {
 
 // Add ShippingAddress interface
 interface ShippingAddress {
+  id?: string;
   firstName: string;
   lastName: string;
   company?: string;
+  organization?: string;
   streetAddress: string;
   apartment?: string;
   city: string;
@@ -97,18 +99,32 @@ export async function recordPurchase(userId: string, purchaseData: any) {
   console.log('Recording purchase for user:', userId);
   console.log('Purchase data to record:', JSON.stringify(purchaseData, null, 2));
   
-  // Validate purchase data
+  // Basic validation of purchase data
   if (!purchaseData.items || !Array.isArray(purchaseData.items)) {
     console.error('Invalid purchase data: items is missing or not an array');
     purchaseData.items = [];
   }
   
+  // Handle potential undefined values that cause Firestore errors
+  if (purchaseData.subscription === undefined) {
+    console.log('Converting undefined subscription to null before saving to Firestore');
+    purchaseData.subscription = null;
+  }
+  
+  // Clean the purchaseData to remove undefined values (Firestore doesn't accept undefined)
+  const cleanedPurchaseData = cleanObjectForFirestore(purchaseData);
+  
+  // Double-check subscription field after cleaning
+  if (!cleanedPurchaseData.subscription) {
+    cleanedPurchaseData.subscription = null;
+  }
+  
   // Create a new purchase record
   const newPurchase = {
     userId,
-    ...purchaseData,
+    ...cleanedPurchaseData,
     createdAt: new Date(),
-    status: purchaseData.status || 'completed'
+    status: cleanedPurchaseData.status || 'completed'
   };
   
   try {
@@ -117,28 +133,53 @@ export async function recordPurchase(userId: string, purchaseData: any) {
     const purchaseRef = await addDoc(purchasesCollection, newPurchase);
     console.log('Purchase added successfully with ID:', purchaseRef.id);
     
-    // Update user's purchase history
-    const userRef = doc(usersCollection, userId);
-    const userSnap = await getDoc(userRef);
-    
-    if (userSnap.exists()) {
-      console.log('User exists, updating purchase history');
-      const userData = userSnap.data();
-      const purchases = userData.purchases || [];
-      
-      await updateDoc(userRef, {
-        purchases: [...purchases, { id: purchaseRef.id, ...newPurchase }]
-      });
-      console.log('User purchase history updated successfully');
-    } else {
-      console.error('User document not found for user ID:', userId);
-    }
-    
+    // Return the purchase with the ID
     return { id: purchaseRef.id, ...newPurchase };
   } catch (error) {
     console.error('Error recording purchase in Firestore:', error);
     throw error;
   }
+}
+
+/**
+ * Recursively removes undefined values from an object
+ * Firestore doesn't accept undefined values
+ */
+function cleanObjectForFirestore(obj: any): any {
+  // If not an object or null, return as is
+  if (obj === null || typeof obj !== 'object') {
+    return obj;
+  }
+  
+  // Handle arrays
+  if (Array.isArray(obj)) {
+    return obj.map(item => cleanObjectForFirestore(item));
+  }
+  
+  // Process object properties
+  const cleanedObj: any = {};
+  
+  for (const key in obj) {
+    if (Object.prototype.hasOwnProperty.call(obj, key)) {
+      // Skip undefined values
+      if (obj[key] === undefined) {
+        // For fields that should never be undefined, provide a default value
+        if (key === 'subscription') {
+          cleanedObj[key] = null; // Replace undefined subscription with null
+        }
+        continue;
+      }
+      
+      // Recursively clean nested objects/arrays
+      if (obj[key] !== null && typeof obj[key] === 'object') {
+        cleanedObj[key] = cleanObjectForFirestore(obj[key]);
+      } else {
+        cleanedObj[key] = obj[key];
+      }
+    }
+  }
+  
+  return cleanedObj;
 }
 
 /**
@@ -328,6 +369,7 @@ export async function saveShippingInformation(userId: string, shippingData: any,
         firstName: shippingData.firstName || '',
         lastName: shippingData.lastName || '',
         company: shippingData.company || '',
+        organization: shippingData.organization || '',
         streetAddress: shippingData.streetAddress || '',
         apartment: shippingData.apartment || '',
         city: shippingData.city || '',
@@ -336,7 +378,7 @@ export async function saveShippingInformation(userId: string, shippingData: any,
         country: shippingData.country || '',
         phone: shippingData.phone || '',
         phoneCountryCode: shippingData.phoneCountryCode || '',
-        createdAt: new Date()
+        createdAt: shippingData.createdAt || new Date()
       };
       
       // If this is marked as the default address, remove default flag from other addresses
@@ -350,12 +392,21 @@ export async function saveShippingInformation(userId: string, shippingData: any,
         cleanShippingData.isDefault = true;
       }
       
+      // Create a unique ID for the address if it doesn't have one
+      if (!cleanShippingData.id) {
+        cleanShippingData.id = `addr_${Date.now()}_${Math.random().toString(36).substring(2, 10)}`;
+      }
+      
       // Check if we need to update an existing address or add a new one
       const existingAddressIndex = shippingAddresses.findIndex(
         (address: ShippingAddress) => 
-          address.streetAddress === cleanShippingData.streetAddress &&
-          address.city === cleanShippingData.city &&
-          address.postcode === cleanShippingData.postcode
+          address.id === cleanShippingData.id || (
+            address.streetAddress === cleanShippingData.streetAddress &&
+            address.city === cleanShippingData.city &&
+            address.postcode === cleanShippingData.postcode &&
+            address.firstName === cleanShippingData.firstName &&
+            address.lastName === cleanShippingData.lastName
+          )
       );
       
       if (existingAddressIndex >= 0) {
@@ -371,16 +422,37 @@ export async function saveShippingInformation(userId: string, shippingData: any,
       }
       
       // Update user profile with shipping addresses
-      await updateDoc(userRef, {
+      const updates: any = {
         shippingAddresses,
         updatedAt: new Date()
-      });
+      };
+      
+      // Also save shipping info in the user profile for easier access
+      if (cleanShippingData.isDefault) {
+        updates.shippingProfile = {
+          firstName: cleanShippingData.firstName,
+          lastName: cleanShippingData.lastName,
+          company: cleanShippingData.company,
+          organization: cleanShippingData.organization,
+          streetAddress: cleanShippingData.streetAddress,
+          apartment: cleanShippingData.apartment,
+          city: cleanShippingData.city,
+          state: cleanShippingData.state,
+          postcode: cleanShippingData.postcode,
+          country: cleanShippingData.country,
+          phone: cleanShippingData.phone,
+          phoneCountryCode: cleanShippingData.phoneCountryCode,
+          updatedAt: new Date()
+        };
+      }
+      
+      await updateDoc(userRef, updates);
       
       console.log('Shipping information saved successfully');
       return shippingAddresses;
     } else {
-      console.error('User not found when saving shipping information');
-      return null;
+      console.error('User document does not exist');
+      throw new Error('User document does not exist');
     }
   } catch (error) {
     console.error('Error saving shipping information:', error);

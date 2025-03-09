@@ -8,16 +8,71 @@
  * - Logout operations
  */
 
-import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, updateProfile } from 'firebase/auth';
+import { 
+  getAuth, 
+  signInWithEmailAndPassword, 
+  createUserWithEmailAndPassword, 
+  signOut, 
+  updateProfile, 
+  browserLocalPersistence, 
+  setPersistence 
+} from 'firebase/auth';
 import { app } from './index';
-import { getFirestore, doc, setDoc, getDoc, collection } from 'firebase/firestore';
+import { getFirestore, doc, setDoc, getDoc, collection, updateDoc } from 'firebase/firestore';
 
 // Initialize Firebase Auth
 export const auth = getAuth(app);
 
+// Configure auth persistence to LOCAL to keep the user logged in
+// even after browser refresh or closing the tab
+setPersistence(auth, browserLocalPersistence)
+  .then(() => {
+    console.log('Firebase Auth persistence set to LOCAL');
+  })
+  .catch((error) => {
+    console.error('Error setting auth persistence:', error);
+  });
+
 // Initialize Firestore directly in auth module to avoid circular dependencies
 const db = getFirestore(app);
 const usersCollection = collection(db, 'users');
+
+// Add or update the user profile type definition to include new fields
+interface UserProfileData {
+  id: string;
+  email: string;
+  name: string;
+  subscription?: {
+    status: string;
+    plan: string;
+    endDate: string;
+    token?: string | null;
+    billingCycle?: string;
+    price?: number;
+  };
+  purchases?: any[];
+  createdAt?: string;
+  lastLogin?: string;
+  membershipInfo?: {
+    joinDate: string;
+    status: string;
+    expiryDate: string | null;
+    updatedAt?: string;
+    totalPurchases?: number;
+    renewalCount?: number;
+    totalSpend?: number;
+    lastPurchaseDate?: string;
+  };
+  subscriptionHistory?: Array<{
+    purchaseDate: string;
+    plan: string;
+    billingCycle: string;
+    amount: number;
+    expiryDate: string | null;
+    transactionId: string;
+  }>;
+  totalSubscriptionSpend?: number;
+}
 
 // Internal helper function to save user profile
 async function _saveUserProfile(userId: string, userData: any) {
@@ -63,33 +118,14 @@ async function _saveUserProfile(userId: string, userData: any) {
   }
 }
 
-// Internal helper function to get user profile
-async function _getUserProfile(userId: string) {
+// Update the _getUserProfile function to use the new type
+async function _getUserProfile(userId: string): Promise<UserProfileData | null> {
   try {
-    console.log('Getting user profile from Firestore:', userId);
     const userRef = doc(usersCollection, userId);
     const userSnap = await getDoc(userRef);
     
     if (userSnap.exists()) {
-      const userData = { id: userSnap.id, ...userSnap.data() } as {
-        id: string;
-        email: string;
-        name: string;
-        subscription?: {
-          status: string;
-          plan: string;
-          endDate: string;
-        };
-        purchases?: any[];
-        createdAt?: string;
-        lastLogin?: string;
-        membershipInfo?: {
-          joinDate: string;
-          status: string;
-          expiryDate: string | null;
-          updatedAt?: string;
-        };
-      };
+      const userData = { id: userSnap.id, ...userSnap.data() } as UserProfileData;
       console.log('User profile retrieved successfully');
       return userData;
     }
@@ -98,31 +134,6 @@ async function _getUserProfile(userId: string) {
     return null;
   } catch (error: any) {
     console.error('Error getting user profile from Firestore:', error);
-    
-    // Check if it's a permission error
-    if (error.code === 'permission-denied') {
-      console.warn('FIREBASE PERMISSION ERROR: You need to update your Firebase security rules for read access');
-      // For development, create a fake profile based on the uid
-      return {
-        id: userId,
-        email: 'temp@example.com',
-        name: 'Temporary User',
-        createdAt: new Date().toISOString(),
-        lastLogin: new Date().toISOString(),
-        subscription: {
-          status: 'inactive',
-          plan: 'none',
-          endDate: new Date().toISOString(),
-        },
-        purchases: [],
-        membershipInfo: {
-          joinDate: new Date().toISOString(),
-          status: 'free',
-          expiryDate: null
-        }
-      };
-    }
-    
     throw error;
   }
 }
@@ -130,6 +141,10 @@ async function _getUserProfile(userId: string) {
 export async function loginWithEmail(email: string, password: string) {
   try {
     console.log('Attempting login with email:', email);
+    
+    // Ensure persistence is set to LOCAL for this specific login
+    await setPersistence(auth, browserLocalPersistence);
+    
     const result = await signInWithEmailAndPassword(auth, email, password);
     
     // Get the user profile from Firestore
@@ -224,7 +239,8 @@ export async function logoutUser() {
   }
 }
 
-export async function updateUserMembership(userId: string, membershipData: any) {
+// Update the updateUserMembership function to use the correct type
+export async function updateUserMembership(userId: string, membershipData: any): Promise<UserProfileData> {
   try {
     // Get the current user profile
     const userProfile = await _getUserProfile(userId);
@@ -233,33 +249,78 @@ export async function updateUserMembership(userId: string, membershipData: any) 
       throw new Error('User profile not found');
     }
     
+    // Get current date for tracking
+    const now = new Date();
+    
+    // Track subscription history and total spend
+    const purchaseAmount = membershipData.price || 0;
+    const subscriptionHistory = userProfile.subscriptionHistory || [];
+    
+    // Add the new subscription to history
+    subscriptionHistory.push({
+      purchaseDate: now.toISOString(),
+      plan: membershipData.plan || 'none',
+      billingCycle: membershipData.billingCycle || 'monthly',
+      amount: purchaseAmount,
+      expiryDate: membershipData.endDate || null,
+      transactionId: membershipData.transactionId || `txn_${Date.now()}`
+    });
+    
+    // Calculate the total amount spent on subscriptions
+    let totalSubscriptionSpend = userProfile.totalSubscriptionSpend || 0;
+    totalSubscriptionSpend += purchaseAmount;
+    
     // Update the membership information
     const updatedProfile = {
       ...userProfile,
+      // Update subscription info
       subscription: {
         status: membershipData.status || 'inactive',
         plan: membershipData.plan || 'none',
         endDate: membershipData.endDate || new Date().toISOString(),
+        token: membershipData.subscriptionToken || null,
+        billingCycle: membershipData.billingCycle || 'monthly',
+        price: membershipData.price || 0
       },
+      // Track subscription history
+      subscriptionHistory: subscriptionHistory,
+      // Update total spend on subscriptions
+      totalSubscriptionSpend: totalSubscriptionSpend,
+      // Update membership info
       membershipInfo: {
         // Check if existing membershipInfo exists, otherwise create new object
         ...(userProfile.membershipInfo || {
-          joinDate: new Date().toISOString(),
+          joinDate: now.toISOString(),
           status: 'free',
-          expiryDate: null
+          expiryDate: null,
+          totalPurchases: 0,
+          renewalCount: 0
         }),
         status: membershipData.status || 'free',
         expiryDate: membershipData.endDate || null,
-        updatedAt: new Date().toISOString()
+        billingCycle: membershipData.billingCycle || 'monthly',
+        token: membershipData.subscriptionToken || null,
+        updatedAt: now.toISOString(),
+        // Increment total purchases
+        totalPurchases: (userProfile.membershipInfo?.totalPurchases || 0) + 1,
+        // If this is a renewal (same plan), increment renewalCount
+        renewalCount: userProfile.subscription?.plan === membershipData.plan 
+          ? (userProfile.membershipInfo?.renewalCount || 0) + 1 
+          : (userProfile.membershipInfo?.renewalCount || 0),
+        // Track cumulative spending
+        totalSpend: (userProfile.membershipInfo?.totalSpend || 0) + purchaseAmount,
+        // Last purchase date
+        lastPurchaseDate: now.toISOString()
       }
     };
     
-    // Save the updated profile to Firestore
-    await _saveUserProfile(userId, updatedProfile);
+    // Update the user document in Firestore
+    const userRef = doc(usersCollection, userId);
+    await updateDoc(userRef, updatedProfile);
     
     return updatedProfile;
   } catch (error) {
-    console.error('Update membership error:', error);
-    throw new Error('Failed to update membership');
+    console.error('Error updating user membership:', error);
+    throw error;
   }
 } 

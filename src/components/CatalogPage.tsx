@@ -309,7 +309,7 @@ const CatalogPage: React.FC = () => {
       <Header />
       
       <main className="flex-grow container mx-auto px-4 py-8">
-        {/* Page Header - Updated to match MonthlyArticlesPage style */}
+        {/* Page Header */}
         <div className="text-center mb-12 bg-white rounded-2xl p-8 shadow-sm">
           <h1 className="text-4xl font-bold mb-4 bg-clip-text text-transparent bg-gradient-to-r from-[#2bcd82] to-[#25b975]">Resource Catalog</h1>
           <p className="text-lg text-gray-600 max-w-3xl mx-auto">
@@ -434,10 +434,17 @@ const CatalogPage: React.FC = () => {
                   )}
                   
                   {/* Sale Tag */}
-                  <div className="absolute top-0 right-0 bg-[#fb6a69] text-white px-3 py-1 rounded-bl-lg text-sm font-bold flex items-center">
-                    <Tag className="w-4 h-4 mr-1" />
-                    {getDiscountPercentage(getProductPrice(product), originalPrices[product.id])}% OFF
-                  </div>
+                  {getProductPrice(product) > 0 ? (
+                    <div className="absolute top-0 right-0 bg-[#fb6a69] text-white px-3 py-1 rounded-bl-lg text-sm font-bold flex items-center">
+                      <Tag className="w-4 h-4 mr-1" />
+                      {getDiscountPercentage(getProductPrice(product), originalPrices[product.id])}% OFF
+                    </div>
+                  ) : (
+                    <div className="absolute top-0 right-0 bg-[#2bcd82] text-white px-3 py-1 rounded-bl-lg text-sm font-bold flex items-center">
+                      <Tag className="w-4 h-4 mr-1" />
+                      FREE
+                    </div>
+                  )}
                 </div>
                 
                 <div className="p-5 flex flex-col flex-grow">
@@ -482,15 +489,24 @@ const CatalogPage: React.FC = () => {
                   
                   <div className="mt-auto flex items-center justify-between">
                     <div className="flex flex-col">
-                      {/* Original Price (crossed out) */}
-                      <span className="text-gray-500 line-through text-sm">
-                        {formatCurrency(originalPrices[product.id])}
-                      </span>
-                      
-                      {/* Sale Price */}
-                      <span className="text-[#fb6a69] font-bold text-lg">
-                        {formatCurrency(getProductPrice(product))}
-                      </span>
+                      {getProductPrice(product) > 0 ? (
+                        <>
+                          {/* Original Price (crossed out) */}
+                          <span className="text-gray-500 line-through text-sm">
+                            {formatCurrency(originalPrices[product.id])}
+                          </span>
+                          
+                          {/* Sale Price */}
+                          <span className="text-[#fb6a69] font-bold text-lg">
+                            {formatCurrency(getProductPrice(product))}
+                          </span>
+                        </>
+                      ) : (
+                        /* Free Product Price */
+                        <span className="text-[#2bcd82] font-bold text-lg">
+                          Free
+                        </span>
+                      )}
                     </div>
                     
                     <div className="flex space-x-2">

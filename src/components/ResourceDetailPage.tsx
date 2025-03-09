@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { ArrowLeft, ShoppingCart, Check, Star, Loader, Clock, BookOpen, Users, AlertCircle, FileText, Download, LockIcon, ShieldCheck, Info, CheckCircle, Tag } from 'lucide-react';
 import Header from './Header';
@@ -58,17 +58,57 @@ const SAMPLE_PRODUCT: FirebaseProduct = {
 };
 
 // Helper function to format currency
-const formatCurrency = (amount: number): string => {
+const formatCurrency = (amount: number | string | undefined): string => {
+  // Handle undefined, null, or empty values
+  if (amount === undefined || amount === null || amount === '') {
+    return '$0.00';
+  }
+  
+  // Convert to number if it's a string
+  let numericAmount: number;
+  
+  if (typeof amount === 'number') {
+    numericAmount = amount;
+  } else {
+    // Parse string, removing any non-numeric characters except decimal point
+    const cleanAmount = String(amount).replace(/[^0-9.-]+/g, '');
+    numericAmount = parseFloat(cleanAmount);
+  }
+  
+  // Handle NaN
+  if (isNaN(numericAmount)) {
+    console.warn('Invalid amount format:', amount);
+    return '$0.00';
+  }
+  
+  // Format the amount as currency
   return new Intl.NumberFormat('en-US', {
     style: 'currency',
     currency: 'USD',
     minimumFractionDigits: 2
-  }).format(amount);
+  }).format(numericAmount);
 };
 
 // Add a helper function to safely check if text contains HTML
 const containsHtml = (text: string): boolean => {
   return /<\/?[a-z][\s\S]*>/i.test(text);
+};
+
+// This creates a fake original price that's 10-20% higher than the actual price
+const calculateOriginalPrice = (actualPrice: number): number => {
+  // Random discount between 10% and 20%
+  const discountPercentage = Math.floor(Math.random() * 11) + 10; // 10-20
+  
+  // Calculate the "original" price
+  const originalPrice = actualPrice * (100 / (100 - discountPercentage));
+  
+  // Round to 2 decimal places
+  return Math.round(originalPrice * 100) / 100;
+};
+
+// Calculate the discount percentage for a product
+const getDiscountPercentage = (actualPrice: number, originalPrice: number): number => {
+  return Math.round(((originalPrice - actualPrice) / originalPrice) * 100);
 };
 
 const ResourceDetailPage: React.FC = () => {
@@ -118,10 +158,16 @@ const ResourceDetailPage: React.FC = () => {
   
   // Get product price regardless of format
   const getProductPrice = (product: FirebaseProduct): number => {
+    if (!product || product.price === undefined || product.price === null) {
+      return 0;
+    }
+    
     if (typeof product.price === 'number') {
-      return product.price;
+      return isNaN(product.price) ? 0 : product.price;
     } else if (typeof product.price === 'string') {
-      return parseFloat(product.price.replace(/[^0-9.-]+/g, '')) || 0;
+      const cleanPrice = product.price.replace(/[^0-9.-]+/g, '');
+      const parsedPrice = parseFloat(cleanPrice);
+      return isNaN(parsedPrice) ? 0 : parsedPrice;
     }
     return 0;
   };
@@ -368,6 +414,13 @@ const ResourceDetailPage: React.FC = () => {
     setPdfDetails(null);
   };
   
+  const productPrice = product ? getProductPrice(product) : 0;
+  
+  // Calculate the "original" price for the discount
+  const originalPrice = useMemo(() => {
+    return calculateOriginalPrice(productPrice);
+  }, [productPrice]);
+  
   if (loading) {
     return (
       <div className="min-h-screen bg-gray-50 flex flex-col">
@@ -457,15 +510,22 @@ const ResourceDetailPage: React.FC = () => {
         <div className="bg-white rounded-xl shadow-sm overflow-hidden">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-8 p-6 md:p-8">
             {/* Product Image */}
-            <div className="rounded-lg overflow-hidden bg-gray-100 flex items-center justify-center min-h-[300px]">
+            <div className="rounded-lg overflow-hidden bg-gray-50 flex items-center justify-center min-h-[240px] max-h-[500px] m-auto w-[450px] p-4">
               {product.thumbnail || product.image || product.images?.[0]?.src ? (
-                <img 
-                  src={product.thumbnail || product.image || product.images?.[0]?.src} 
-                  alt={product.name || product.title || 'Product'} 
-                  className="w-full h-full object-contain"
-                />
+                <div className="book-container relative transform hover:rotate-y-5 transition-transform duration-300">
+                  <img 
+                    src={product.thumbnail || product.image || product.images?.[0]?.src} 
+                    alt={product.name || product.title || 'Product'} 
+                    className="w-full h-full object-contain rounded-md shadow-[8px_8px_12px_rgba(0,0,0,0.2)] border-r-4 border-b-4 border-gray-200"
+                    style={{ 
+                      transformStyle: 'preserve-3d',
+                      perspective: '1000px'
+                    }}
+                  />
+                  <div className="absolute inset-y-0 right-0 w-4 bg-gradient-to-l from-gray-300 to-gray-100 rounded-r-sm"></div>
+                </div>
               ) : (
-                <div className="text-gray-400 text-center p-8">
+                <div className="text-gray-400 text-center p-8 shadow-md border border-gray-200 rounded-lg bg-white">
                   <BookOpen className="w-16 h-16 mx-auto mb-4" />
                   <p>No preview available</p>
                 </div>
@@ -499,8 +559,42 @@ const ResourceDetailPage: React.FC = () => {
                 </div>
               )}
               
-              <div className="text-2xl text-[#fb6a69] font-bold mb-4">
-                {formatCurrency(getProductPrice(product))}
+              {/* Sale Tag */}
+              {productPrice > 0 ? (
+                <div className="mb-4 flex items-center bg-[#ffebeb] p-2 rounded">
+                  <Tag className="text-[#fb6a69] mr-2 w-5 h-5" />
+                  <span className="text-[#fb6a69] text-sm font-bold">
+                    {getDiscountPercentage(productPrice, originalPrice)}% OFF
+                  </span>
+                </div>
+              ) : (
+                <div className="mb-4 flex items-center bg-[#ebfdf3] p-2 rounded">
+                  <Tag className="text-[#2bcd82] mr-2 w-5 h-5" />
+                  <span className="text-[#2bcd82] text-sm font-bold">
+                    FREE
+                  </span>
+                </div>
+              )}
+              
+              <div className="mb-4">
+                {productPrice > 0 ? (
+                  <>
+                    {/* Original Price (crossed out) */}
+                    <span className="text-gray-500 line-through text-lg block">
+                      {formatCurrency(originalPrice)}
+                    </span>
+                    
+                    {/* Sale Price */}
+                    <span className="text-2xl text-[#fb6a69] font-bold">
+                      {formatCurrency(productPrice)}
+                    </span>
+                  </>
+                ) : (
+                  /* Free Product Price */
+                  <span className="text-2xl text-[#2bcd82] font-bold">
+                    Free
+                  </span>
+                )}
               </div>
               
               <div className="flex flex-col space-y-4 mt-auto">

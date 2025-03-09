@@ -2,33 +2,90 @@ import React, { createContext, useState, useContext, ReactNode, useEffect } from
 import { auth, loginWithEmail, registerWithEmail, logoutUser, updateUserMembership } from '../lib/firebase/auth';
 import { onAuthStateChanged, User as FirebaseUser } from 'firebase/auth';
 import { saveUserProfile, getUserProfile, recordPurchase, getUserPurchases, saveBillingInformation, getUserBillingInformation, saveShippingInformation, getUserShippingInformation } from '../lib/firebase/firestore';
+import { toast } from 'react-hot-toast';
+
+// Add Purchase interface definition
+interface PurchaseItem {
+  id: number | string;
+  type: 'product' | 'plan';
+  name: string;
+  description?: string;
+  category?: string;
+  price: string | number;
+  quantity: number;
+  imageUrl?: string;
+  pdfUrl?: string;
+  fileUrl?: string;
+}
+
+interface Purchase {
+  id: string;
+  items: PurchaseItem[];
+  total: string | number;
+  transactionId: string;
+  paymentMethod: string;
+  purchaseDate: string;
+  status: string;
+  createdAt?: any;
+  billingInfo?: {
+    firstName?: string;
+    lastName?: string;
+    email?: string;
+  };
+  subscription?: {
+    plan: string;
+    billingCycle: string;
+    endDate: string;
+    token?: string;
+    status?: string;
+  };
+}
 
 // Define user types
 export interface UserProfile {
   id: string;
+  name?: string;
   email: string;
-  name: string;
+  photoURL?: string;
+  role?: string;
+  createdAt?: string;
+  lastLogin?: string;
   subscription?: {
     status: string;
     plan: string;
     endDate: string;
+    token?: string;
+    billingCycle?: 'monthly' | 'yearly';
   };
-  purchases?: any[];
-  createdAt?: string;
-  lastLogin?: string;
+  purchases?: Purchase[];
+  billingAddresses?: BillingAddress[];
   membershipInfo?: {
     joinDate: string;
     status: string;
     expiryDate: string | null;
     updatedAt?: string;
+    token?: string;
+    billingCycle?: 'monthly' | 'yearly';
+    totalPurchases?: number;
+    renewalCount?: number;
+    totalSpend?: number;
+    lastPurchaseDate?: string;
   };
+  subscriptionHistory?: Array<{
+    purchaseDate: string;
+    plan: string;
+    billingCycle: string;
+    amount: number;
+    expiryDate: string | null;
+    transactionId: string;
+  }>;
+  totalSubscriptionSpend?: number;
   phone?: string;
   street?: string;
   city?: string;
   state?: string;
   zip?: string;
   country?: string;
-  billingAddresses?: BillingAddress[];
   shippingAddresses?: ShippingAddress[];
 }
 
@@ -86,6 +143,8 @@ interface AuthContextType {
   getBillingInfo: () => Promise<BillingAddress[]>;
   saveShippingInfo: (shippingData: any, isDefault: boolean) => Promise<any>;
   getShippingInfo: () => Promise<ShippingAddress[]>;
+  isSubscriptionActive: () => boolean;
+  getSubscriptionRemainingDays: () => number;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -255,20 +314,94 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const recordUserPurchase = async (purchaseData: any) => {
     if (!user) throw new Error('User not authenticated');
     
-    const purchase = await recordPurchase(user.id, purchaseData);
-    
-    // Update local user state with new purchase
-    setUser(prevUser => {
-      if (!prevUser) return null;
+    try {
+      // Ensure purchaseData is properly structured
+      if (!purchaseData.items) purchaseData.items = [];
+      if (!purchaseData.status) purchaseData.status = 'completed';
+      if (!purchaseData.purchaseDate) purchaseData.purchaseDate = new Date().toISOString();
       
-      const purchases = prevUser.purchases || [];
-      return {
-        ...prevUser,
-        purchases: [...purchases, purchase]
-      };
-    });
-    
-    return purchase;
+      // Record the purchase in the database
+      const purchase = await recordPurchase(user.id, purchaseData);
+      
+      // Check if this is a subscription purchase
+      if (purchaseData.subscription && typeof purchaseData.subscription === 'object') {
+        // Generate expiration date based on billing cycle
+        const now = new Date();
+        const expirationDate = new Date(now);
+        
+        // Get billing cycle with fallback to monthly
+        const billingCycle = purchaseData.subscription.billingCycle || 'monthly';
+        
+        if (billingCycle === 'yearly') {
+          // Add 1 year to current date
+          expirationDate.setFullYear(now.getFullYear() + 1);
+        } else {
+          // Default to monthly - add 1 month to current date
+          expirationDate.setMonth(now.getMonth() + 1);
+        }
+        
+        // Generate a unique token if not provided
+        const token = purchaseData.subscription.token || 
+          `sub_${purchaseData.subscription.plan}_${Date.now()}_${Math.random().toString(36).substring(2, 15)}`;
+        
+        // Extract price information
+        let subscriptionPrice = 0;
+        
+        // Try to get price from subscription object
+        if (purchaseData.subscription.price !== undefined) {
+          if (typeof purchaseData.subscription.price === 'string') {
+            const cleanPrice = purchaseData.subscription.price.replace(/[^0-9.-]+/g, '');
+            subscriptionPrice = parseFloat(cleanPrice);
+            if (isNaN(subscriptionPrice)) subscriptionPrice = 0;
+          } else if (typeof purchaseData.subscription.price === 'number') {
+            subscriptionPrice = purchaseData.subscription.price;
+          }
+        }
+        // If no price in subscription, try to get from total
+        else if (purchaseData.total) {
+          if (typeof purchaseData.total === 'string') {
+            const cleanTotal = purchaseData.total.replace(/[^0-9.-]+/g, '');
+            subscriptionPrice = parseFloat(cleanTotal);
+            if (isNaN(subscriptionPrice)) subscriptionPrice = 0;
+          } else if (typeof purchaseData.total === 'number') {
+            subscriptionPrice = purchaseData.total;
+          }
+        }
+        
+        // Update user membership with complete data
+        await updateMembership({
+          status: 'active',
+          plan: purchaseData.subscription.plan,
+          // Use provided end date or calculate one
+          endDate: purchaseData.subscription.endDate || expirationDate.toISOString(),
+          subscriptionToken: token,
+          billingCycle: billingCycle,
+          price: subscriptionPrice,
+          transactionId: purchaseData.transactionId || purchase.id
+        });
+        
+        console.log(`Subscription ${token} activated, expires: ${expirationDate.toLocaleDateString()}`);
+        
+        // Show success message to user
+        toast.success(`Your ${billingCycle} subscription has been activated!`);
+      }
+      
+      // Update local user state with new purchase
+      setUser(prevUser => {
+        if (!prevUser) return null;
+        
+        const purchases = prevUser.purchases || [];
+        return {
+          ...prevUser,
+          purchases: [...purchases, purchase]
+        };
+      });
+      
+      return purchase;
+    } catch (error) {
+      console.error('Error recording purchase:', error);
+      throw error;
+    }
   };
   
   // Get user purchase history
@@ -373,6 +506,36 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }
   };
 
+  // Add utility functions for checking subscription status
+  const isSubscriptionActive = (user: UserProfile | null): boolean => {
+    if (!user || !user.subscription) return false;
+    
+    // Check if subscription is marked as active
+    if (user.subscription.status !== 'active') return false;
+    
+    // Check if the subscription has expired
+    const endDate = new Date(user.subscription.endDate);
+    const now = new Date();
+    
+    return endDate > now;
+  };
+
+  const getSubscriptionRemainingDays = (user: UserProfile | null): number => {
+    if (!user || !user.subscription || !user.subscription.endDate) return 0;
+    
+    const endDate = new Date(user.subscription.endDate);
+    const now = new Date();
+    
+    // If already expired, return 0
+    if (endDate <= now) return 0;
+    
+    // Calculate days remaining
+    const diffTime = endDate.getTime() - now.getTime();
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+    
+    return diffDays;
+  };
+
   return (
     <AuthContext.Provider 
       value={{ 
@@ -389,7 +552,9 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         saveBillingInfo,
         getBillingInfo,
         saveShippingInfo,
-        getShippingInfo
+        getShippingInfo,
+        isSubscriptionActive: () => isSubscriptionActive(user),
+        getSubscriptionRemainingDays: () => getSubscriptionRemainingDays(user)
       }}
     >
       {children}

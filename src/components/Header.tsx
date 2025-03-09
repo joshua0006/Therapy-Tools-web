@@ -46,9 +46,6 @@ const Header: React.FC = () => {
             
             {isLoggedIn && (
               <>
-                <Link to="/monthly-articles" className="text-gray-700 hover:text-[#2bcd82] font-medium transition-colors flex items-center">
-                  <BookOpen className="w-5 h-5 mr-2" /> Monthly Articles
-                </Link>
                 <Link to="/purchases" className="text-gray-700 hover:text-[#2bcd82] font-medium transition-colors flex items-center">
                   <ShoppingCart className="w-5 h-5 mr-2" /> My Purchases
                 </Link>
@@ -136,13 +133,6 @@ const Header: React.FC = () => {
               
               {isLoggedIn && (
                 <>
-                  <Link 
-                    to="/monthly-articles" 
-                    className="text-gray-700 hover:text-[#2bcd82] font-medium transition-colors flex items-center"
-                    onClick={() => setMobileMenuOpen(false)}
-                  >
-                    <BookOpen className="w-5 h-5 mr-2" /> Monthly Articles
-                  </Link>
                   <Link 
                     to="/purchases" 
                     className="text-gray-700 hover:text-[#2bcd82] font-medium transition-colors flex items-center"

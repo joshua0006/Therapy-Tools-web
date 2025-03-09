@@ -420,7 +420,7 @@ const EventsNewsPage: React.FC = () => {
           </div>
         ) : (
           <>
-            {/* Page Header - Updated to match MonthlyArticlesPage style */}
+            {/* Page Header */}
             <div className="text-center mb-12 bg-white rounded-2xl p-8 shadow-sm">
               <h1 className="text-4xl font-bold mb-4 bg-clip-text text-transparent bg-gradient-to-r from-[#2bcd82] to-[#25b975]">Events & News</h1>
               <p className="text-lg text-gray-600 max-w-3xl mx-auto">

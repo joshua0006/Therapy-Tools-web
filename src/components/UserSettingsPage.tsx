@@ -5,6 +5,7 @@ import { Eye, EyeOff, AlertCircle, CheckCircle, Save, Plus, MapPin, Edit, Trash 
 import Header from './Header';
 import Footer from './Footer';
 import { toast } from 'react-hot-toast';
+import ShippingAddressCard from './ShippingAddressCard';
 
 // Countries for dropdown
 const countries = [
@@ -471,49 +472,13 @@ const UserSettingsPage: React.FC = () => {
         {!isAddingNewAddress && !isEditingAddress && (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
             {shippingAddresses.map((address, index) => (
-              <div 
+              <ShippingAddressCard
                 key={index}
-                className={`border p-4 rounded-md relative ${
-                  selectedShippingAddress === index ? 'border-[#2bcd82] bg-green-50' : 'border-gray-200'
-                }`}
-              >
-                <div className="flex justify-between items-start mb-2">
-                  <div className="font-medium">{address.firstName} {address.lastName}</div>
-                  {address.isDefault && (
-                    <span className="text-xs bg-[#2bcd82] text-white px-2 py-1 rounded-full">Default</span>
-                  )}
-                </div>
-                
-                {address.company && <div className="text-gray-600 text-sm">{address.company}</div>}
-                <div className="text-gray-600 text-sm">
-                  {address.streetAddress}
-                  {address.apartment && `, ${address.apartment}`}
-                </div>
-                <div className="text-gray-600 text-sm">
-                  {address.city}{address.city && address.state ? ', ' : ''}{address.state} {address.postcode}
-                </div>
-                <div className="text-gray-600 text-sm">{address.country}</div>
-                <div className="text-gray-600 text-sm mt-1">
-                  {address.phoneCountryCode} {address.phone}
-                </div>
-                
-                <div className="mt-3 pt-3 border-t border-gray-100 flex gap-2">
-                  <button
-                    type="button"
-                    onClick={() => handleEditAddress(index)}
-                    className="text-sm text-blue-600 hover:text-blue-800 flex items-center"
-                  >
-                    <Edit className="h-3 w-3 mr-1" /> Edit
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => handleDeleteAddress(index)}
-                    className="text-sm text-red-600 hover:text-red-800 flex items-center"
-                  >
-                    <Trash className="h-3 w-3 mr-1" /> Delete
-                  </button>
-                </div>
-              </div>
+                address={address}
+                onEdit={() => handleEditAddress(index)}
+                onDelete={() => handleDeleteAddress(index)}
+                onSetDefault={() => handleSetAsDefault(index)}
+              />
             ))}
             
             {shippingAddresses.length === 0 && (
@@ -881,6 +846,30 @@ const UserSettingsPage: React.FC = () => {
         </div>
       </div>
     );
+  };
+  
+  const handleSetAsDefault = async (index: number) => {
+    try {
+      if (index >= 0 && index < shippingAddresses.length) {
+        // Get the address to set as default
+        const addressToUpdate = shippingAddresses[index];
+        
+        // Update the address with isDefault flag
+        await saveShippingInfo({
+          ...addressToUpdate,
+          updatedAt: new Date()
+        }, true);
+        
+        // Refresh the shipping addresses
+        await loadShippingAddresses();
+        
+        // Show success message
+        toast.success('Default shipping address updated successfully');
+      }
+    } catch (error) {
+      console.error('Error setting default address:', error);
+      toast.error('Failed to update default address');
+    }
   };
   
   return (
