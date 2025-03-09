@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { X, ChevronLeft, ChevronRight, RefreshCw, AlertTriangle, FileText, ShieldCheck, Eye, Download } from 'lucide-react';
+import { X, RefreshCw, AlertTriangle, FileText, ShieldCheck, Download } from 'lucide-react';
 import { toast } from 'sonner';
 import { getFirestore, doc, getDoc } from 'firebase/firestore';
 

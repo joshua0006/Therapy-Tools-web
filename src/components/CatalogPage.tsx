@@ -5,7 +5,7 @@ import Footer from './Footer';
 import { Search, Filter, Grid, ShoppingCart, Loader, Tag, FileText, AlertCircle } from 'lucide-react';
 import { useCart } from '../context/CartContext';
 import { toast } from 'react-hot-toast';
-import { getFirestore, collection, getDocs, query, where } from 'firebase/firestore';
+import { getFirestore, collection, getDocs } from 'firebase/firestore';
 import { app } from '../lib/firebase'; // Import the Firebase app directly
 
 // Sample products data to use when Firebase access fails

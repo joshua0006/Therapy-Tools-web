@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, ShoppingCart, Check, Star, Loader, Clock, BookOpen, Users, AlertCircle, FileText, Download, LockIcon, ShieldCheck, Info, CheckCircle, Tag } from 'lucide-react';
+import { ArrowLeft, ShoppingCart, Check, Star, Loader, Clock, BookOpen, Users, AlertCircle, FileText, LockIcon, Info, CheckCircle, Tag } from 'lucide-react';
 import Header from './Header';
 import Footer from './Footer';
 import Button from './Button';

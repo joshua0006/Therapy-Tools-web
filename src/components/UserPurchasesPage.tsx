@@ -4,11 +4,9 @@ import Header from './Header';
 import Footer from './Footer';
 import Button from './Button';
 import { useAuth } from '../context/AuthContext';
-import { formatDate } from '../utils/formatters';
-import { Download, Package, Clock, CircleDollarSign, RefreshCw, User, CreditCard, Calendar, Eye, FileText, ChevronDown, ChevronUp, CheckCircle, LockIcon, ShieldCheck, Search, Filter, XCircle, DownloadCloud, AlertCircle, CreditCard as CardIcon, Settings } from 'lucide-react';
+import {  Package, CircleDollarSign, RefreshCw, User, CreditCard, FileText, ChevronDown, ChevronUp, CheckCircle, Search, Filter, XCircle, AlertCircle, Settings } from 'lucide-react';
 import SecurePdfViewer from './SecurePdfViewer';
-import { getFirestore, doc, getDoc, collection, query, where, getDocs, limit } from 'firebase/firestore';
-import { initializeApp } from 'firebase/app';
+import { getFirestore, doc, getDoc, collection, query, where, getDocs} from 'firebase/firestore';
 import { toast } from 'react-hot-toast';
 
 // Define the PurchaseItem and Purchase interfaces for better type safety
@@ -158,8 +156,7 @@ const UserPurchasesPage: React.FC = () => {
   const [sortOption, setSortOption] = useState<SortOption>('newest');
   const [showFilters, setShowFilters] = useState(false);
   const [expandedDates, setExpandedDates] = useState<Record<string, boolean>>({});
-  const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set());
-
+  
   // Update the state for subscription information
   const [subscriptions, setSubscriptions] = useState<Record<string, { 
     endDate: Date, 
@@ -1137,37 +1134,6 @@ const UserPurchasesPage: React.FC = () => {
     return false;
   };
 
-  // Enhance function to count PDF files
-  const countPdfFiles = (item: PurchaseItem): number => {
-    const productId = String(item.id);
-    const productDetail = productDetails[productId];
-    
-    if (!productDetail) {
-      return 0;
-    }
-    
-    // Check for downloads array
-    if (productDetail.downloads && Array.isArray(productDetail.downloads)) {
-      return productDetail.downloads.filter((download: any) => 
-        download.file && 
-        typeof download.file === 'string' && 
-        download.file.toLowerCase().endsWith('.pdf')
-      ).length;
-    }
-    
-    // Check if there's at least one PDF URL
-    if (productDetail.pdfUrl && typeof productDetail.pdfUrl === 'string') {
-      return 1;
-    }
-    
-    // Check for pdfFiles array
-    if (productDetail.pdfFiles && Array.isArray(productDetail.pdfFiles)) {
-      return productDetail.pdfFiles.length;
-    }
-    
-    return 0;
-  };
-
   // Function to calculate days remaining for a subscription
   const calculateDaysRemaining = (endDateStr: string): number => {
     const endDate = new Date(endDateStr);
@@ -1422,73 +1388,6 @@ const UserPurchasesPage: React.FC = () => {
       newState[dateKey] = !prev[dateKey];
       return newState;
     });
-  };
-
-  // Toggle collapse all groups for a date
-  const toggleGroupCollapsed = (dateKey: string) => {
-    setCollapsedGroups(prev => {
-      const newSet = new Set(prev);
-      if (newSet.has(dateKey)) {
-        newSet.delete(dateKey);
-      } else {
-        newSet.add(dateKey);
-      }
-      return newSet;
-    });
-  };
-
-  // Check if there are any purchase items that match the search term
-  const purchaseContainsSearchTerm = (purchase: Purchase) => {
-    if (!searchTerm) return true;
-    
-    const lowercaseSearch = searchTerm.toLowerCase().trim();
-    
-    // Check transaction ID
-    if (purchase.transactionId && purchase.transactionId.toLowerCase().includes(lowercaseSearch)) return true;
-    
-    // Check item properties
-    const hasMatchingItem = purchase.items && Array.isArray(purchase.items) && purchase.items.some(item => {
-      const itemId = String(item.id);
-      const productDetail = productDetails[itemId];
-      
-      return (
-        // Check item properties
-        (item.name && item.name.toLowerCase().includes(lowercaseSearch)) ||
-        (item.title && item.title.toLowerCase().includes(lowercaseSearch)) ||
-        (item.description && item.description.toLowerCase().includes(lowercaseSearch)) ||
-        (item.category && item.category.toLowerCase().includes(lowercaseSearch)) ||
-        
-        // Check product details from Firebase
-        (productDetail && productDetail.name && productDetail.name.toLowerCase().includes(lowercaseSearch)) ||
-        (productDetail && productDetail.description && productDetail.description.toLowerCase().includes(lowercaseSearch)) ||
-        (productDetail && productDetail.category && productDetail.category.toLowerCase().includes(lowercaseSearch))
-      );
-    });
-    
-    if (hasMatchingItem) return true;
-    
-    // Search by price/total
-    if (purchase.total && purchase.total.toLowerCase().includes(lowercaseSearch)) return true;
-    
-    // Search billing info
-    if (purchase.billingInfo) {
-      const { firstName, lastName, email } = purchase.billingInfo;
-      if (
-        (firstName && firstName.toLowerCase().includes(lowercaseSearch)) ||
-        (lastName && lastName.toLowerCase().includes(lowercaseSearch)) ||
-        (email && email.toLowerCase().includes(lowercaseSearch))
-      ) {
-        return true;
-      }
-    }
-    
-    // Search subscription plan
-    if (purchase.subscription && purchase.subscription.plan && 
-        purchase.subscription.plan.toLowerCase().includes(lowercaseSearch)) {
-      return true;
-    }
-    
-    return false;
   };
 
   // Count visible purchases

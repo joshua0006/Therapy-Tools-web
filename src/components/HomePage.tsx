@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import Header from './Header';
 import Footer from './Footer';
 import Button from './Button';
-import { BookOpen, Users, GraduationCap, Award, Download, ShoppingBag, ChevronLeft, ChevronRight, Clock, MapPin, ExternalLink, FileText, Tag } from 'lucide-react';
+import { BookOpen, Users, GraduationCap, Award, Download, ShoppingBag, ChevronLeft, ChevronRight, Clock, MapPin, ExternalLink, Tag } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useWooCommerce } from '../context/WooCommerceContext';
 import { useEventsNews } from '../context/EventsNewsContext';
