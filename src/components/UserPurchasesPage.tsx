@@ -1,13 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { getFirestore, collection, query, where, getDocs, doc, getDoc } from 'firebase/firestore';
+import { toast } from 'react-hot-toast';
+import { Package, Filter, Search, XCircle, AlertCircle, CreditCard, RefreshCw, User, CircleDollarSign, ChevronDown, ChevronUp, CheckCircle, Settings, FileText } from 'lucide-react';
+import { useAuth } from '../context/AuthContext';
 import Header from './Header';
 import Footer from './Footer';
 import Button from './Button';
-import { useAuth } from '../context/AuthContext';
-import {  Package, CircleDollarSign, RefreshCw, User, CreditCard, FileText, ChevronDown, ChevronUp, CheckCircle, Search, Filter, XCircle, AlertCircle, Settings } from 'lucide-react';
 import SecurePdfViewer from './SecurePdfViewer';
-import { getFirestore, doc, getDoc, collection, query, where, getDocs} from 'firebase/firestore';
-import { toast } from 'react-hot-toast';
 
 // Define the PurchaseItem and Purchase interfaces for better type safety
 interface PurchaseItem {
@@ -140,11 +140,10 @@ const UserPurchasesPage: React.FC = () => {
   const [groupedPurchases, setGroupedPurchases] = useState<GroupedPurchases>({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [selectedProductId, setSelectedProductId] = useState<string | null>(null);
-  const [expandedItems, setExpandedItems] = useState<Record<string, boolean>>({});
+  const [] = useState<Record<string, boolean>>({});
   const [productDownloads, setProductDownloads] = useState<Record<string, Array<{id: string, name: string, file: string}>>>({});
-  const [pdfLoadingStates, setPdfLoadingStates] = useState<Record<string, boolean>>({});
-  const [selectedPdfDetails, setSelectedPdfDetails] = useState<{url: string, name: string, preventDownload: boolean} | null>(null);
+  const [, setPdfLoadingStates] = useState<Record<string, boolean>>({});
+  const [selectedPdfDetails, setSelectedPdfDetails] = useState<{url: string, name: string, preventDownload: boolean, productId?: string} | null>(null);
   const [expandedPurchases, setExpandedPurchases] = useState<Record<string, boolean>>({});
   const [productDetails, setProductDetails] = useState<Record<string, FirebaseProduct>>({});
   const [showPdfViewer, setShowPdfViewer] = useState<boolean>(false);
@@ -169,7 +168,7 @@ const UserPurchasesPage: React.FC = () => {
   }>>({});
 
   // Add new state for tracking accumulated subscription value
-  const [totalSubscriptionValue, setTotalSubscriptionValue] = useState<number>(0);
+  const [, setTotalSubscriptionValue] = useState<number>(0);
 
   // Get Firestore instance
   const db = getFirestore();
@@ -697,372 +696,156 @@ const UserPurchasesPage: React.FC = () => {
 
   // Update the handleViewPdf function to enforce preventDownload
   const handleViewPdf = async (productId: string, downloadIndex?: number, pdfDetails?: {url: string, name: string}) => {
-    try {
-    console.log('Opening PDF viewer for product:', productId, 'download index:', downloadIndex);
+    console.log(`Viewing PDF for product ${productId}, download index: ${downloadIndex}`);
+    setShowPdfViewer(false); // Reset first to avoid stale data
     
-      // If direct PDF details are provided, use them
+    // Set the PDF loading state for this product
+    setPdfLoadingStates(prev => ({
+      ...prev,
+      [productId]: true
+    }));
+    
+    try {
+      // If specific PDF details are provided directly, use them
       if (pdfDetails && pdfDetails.url) {
-        console.log('Using direct PDF details:', pdfDetails);
+        console.log("Using provided PDF details", pdfDetails);
         
         // Always set preventDownload to true for security
-        setSelectedProductId(productId);
         setSelectedPdfDetails({
           url: pdfDetails.url,
-          name: pdfDetails.name || 'Document.pdf',
-          preventDownload: true // Enforce download protection
+          name: pdfDetails.name,
+          preventDownload: true,
+          productId: productId
         });
         setShowPdfViewer(true);
         return;
       }
-
-      // First check if we have the product in our productDetails state
-      const productDetail = productDetails[productId];
-      const item = findPurchaseItemById(productId);
       
-      if (!productDetail && !item) {
-        throw new Error('Product information not found');
+      // Otherwise, check for product document in Firebase
+      if (!db) {
+        throw new Error("Firestore not initialized");
       }
       
-      console.log('Product detail from state:', productDetail);
-      console.log('Item from purchases:', item);
+      // First, try to get product details from the lookup map
+      let product = productDetails[productId];
       
-      // Initialize variables for PDF details
-      let pdfUrl: string | null = null;
-      let pdfName = 'Document.pdf';
+      // If we don't have the product in our map, try to fetch it
+      if (!product) {
+        console.log(`Product not in map, fetching from Firestore: ${productId}`);
+        
+        // Try to get the product from Firestore
+        const productsRef = collection(db, "products");
+        const q = query(productsRef, where("id", "==", productId));
+        const querySnapshot = await getDocs(q);
+        
+        if (!querySnapshot.empty) {
+          const doc = querySnapshot.docs[0];
+          product = {
+            ...doc.data(),
+            docId: doc.id
+          } as FirebaseProduct;
+          
+          // Update our products map
+          setProductDetails(prev => ({
+            ...prev,
+            [productId]: product
+          }));
+        } else {
+          console.error(`Product with ID ${productId} not found in Firestore`);
+          throw new Error(`Product details not found`);
+        }
+      }
       
-      // First try to find PDF in product details (from Firebase)
-      if (productDetail) {
-        // Check for downloads array first
-        if (productDetail.downloads && Array.isArray(productDetail.downloads) && productDetail.downloads.length > 0) {
-          const pdfFiles = productDetail.downloads.filter((download: any) => 
-            download.file && 
-            typeof download.file === 'string' && 
+      // Ensure we have the downloads array to work with
+      let productDownloadsList = productDownloads[productId];
+      if (!productDownloadsList && product.downloads) {
+        productDownloadsList = product.downloads;
+        
+        // Update our downloads map
+        setProductDownloads(prev => ({
+          ...prev,
+          [productId]: productDownloadsList
+        }));
+      }
+      
+      // Collect all available PDF files
+      const pdfFiles: { id: string; name: string; file: string }[] = [];
+      
+      if (productDownloadsList) {
+        // Filter for PDF files in the downloads array
+        productDownloadsList.forEach(download => {
+          if (
+            typeof download.file === 'string' &&
             download.file.toLowerCase().endsWith('.pdf')
-          );
-          
-          if (pdfFiles.length > 0) {
-            // Use specific index or default to first
-            const selectedPdf = typeof downloadIndex === 'number' && downloadIndex < pdfFiles.length
-              ? pdfFiles[downloadIndex]
-              : pdfFiles[0];
-              
-            pdfUrl = selectedPdf.file;
-            pdfName = selectedPdf.name || productDetail.name || 'Document.pdf';
-            
-            console.log(`Found PDF in product downloads:`, selectedPdf);
+          ) {
+            pdfFiles.push(download);
           }
-        }
-        
-        // If no PDF in downloads, check for direct pdfUrl
-        if (!pdfUrl && productDetail.pdfUrl) {
-          pdfUrl = productDetail.pdfUrl;
-          pdfName = productDetail.name || 'Document.pdf';
-          console.log(`Using direct pdfUrl from product:`, pdfUrl);
-        }
-        
-        // If still no PDF, check fileUrl
-        if (!pdfUrl && productDetail.fileUrl && productDetail.fileUrl.toLowerCase().endsWith('.pdf')) {
-          pdfUrl = productDetail.fileUrl;
-          pdfName = productDetail.name || 'Document.pdf';
-          console.log(`Using fileUrl from product:`, pdfUrl);
-        }
+        });
       }
       
-      // If no PDF found in product details, try purchase item data
-      if (!pdfUrl && item) {
-        // Check item downloads
-        if (item.downloads && Array.isArray(item.downloads) && item.downloads.length > 0) {
-          const pdfFiles = item.downloads.filter(download => 
-            download.file && 
-            typeof download.file === 'string' && 
-            download.file.toLowerCase().endsWith('.pdf')
-          );
-          
-          if (pdfFiles.length > 0) {
-            // Use specific index or default to first
-            const selectedPdf = typeof downloadIndex === 'number' && downloadIndex < pdfFiles.length
-              ? pdfFiles[downloadIndex]
-              : pdfFiles[0];
-              
-            pdfUrl = selectedPdf.file;
-            pdfName = selectedPdf.name || item.name || 'Document.pdf';
-            
-            console.log(`Found PDF in item downloads:`, selectedPdf);
-          }
-        }
-        
-        // If no PDF in downloads, check for direct pdfUrl
-        if (!pdfUrl && item.pdfUrl) {
-          pdfUrl = item.pdfUrl;
-          pdfName = item.name || 'Document.pdf';
-          console.log(`Using direct pdfUrl from item:`, pdfUrl);
-        }
-        
-        // If still no PDF, check fileUrl
-        if (!pdfUrl && item.fileUrl && item.fileUrl.toLowerCase().endsWith('.pdf')) {
-          pdfUrl = item.fileUrl;
-          pdfName = item.name || 'Document.pdf';
-          console.log(`Using fileUrl from item:`, pdfUrl);
-        }
+      // Also check if the product itself has a PDF URL
+      if (product.pdfUrl && typeof product.pdfUrl === 'string') {
+        pdfFiles.push({
+          id: 'main-pdf',
+          name: product.name || 'Main Document',
+          file: product.pdfUrl
+        });
       }
       
-      // If we still don't have a PDF URL, try fetching from Firebase directly
-      if (!pdfUrl) {
-        console.log('No PDF found in cached data, fetching from Firebase...');
-        const db = getFirestore();
-        if (!db) {
-          throw new Error('Firebase not initialized');
-        }
-        
-        try {
-          const productRef = doc(db, 'products', String(productId));
-          const productSnap = await getDoc(productRef);
-          
-          if (productSnap.exists()) {
-            const productData = productSnap.data();
-            
-            // Check downloads array
-            if (productData.downloads && Array.isArray(productData.downloads) && productData.downloads.length > 0) {
-              const pdfFiles = productData.downloads.filter((download: any) => 
-          download.file && download.file.toLowerCase().endsWith('.pdf')
-        );
-        
-              if (pdfFiles.length > 0) {
-                const selectedPdf = typeof downloadIndex === 'number' && downloadIndex < pdfFiles.length
-                  ? pdfFiles[downloadIndex]
-                  : pdfFiles[0];
-                
-                pdfUrl = selectedPdf.file;
-                pdfName = selectedPdf.name || productData.name || 'Document.pdf';
-                
-                console.log(`Found PDF in Firebase downloads:`, selectedPdf);
-              }
-            }
-            
-            // Try direct PDF URL
-            if (!pdfUrl && productData.pdfUrl) {
-              pdfUrl = productData.pdfUrl;
-              pdfName = productData.name || 'Document.pdf';
-              console.log(`Using pdfUrl from Firebase:`, pdfUrl);
-            }
-            
-            // Try file URL
-            if (!pdfUrl && productData.fileUrl && productData.fileUrl.toLowerCase().endsWith('.pdf')) {
-              pdfUrl = productData.fileUrl;
-              pdfName = productData.name || 'Document.pdf';
-              console.log(`Using fileUrl from Firebase:`, pdfUrl);
-            }
-          } else {
-            console.log(`Product ${productId} not found in Firebase`);
-          }
-        } catch (error) {
-          console.error('Error fetching product from Firebase:', error);
-        }
+      // Or a file URL that's a PDF
+      if (product.fileUrl && typeof product.fileUrl === 'string' && 
+          product.fileUrl.toLowerCase().endsWith('.pdf')) {
+        pdfFiles.push({
+          id: 'file-pdf',
+          name: product.name || 'Document',
+          file: product.fileUrl
+        });
       }
       
-      // If we still don't have a PDF URL, throw an error
-      if (!pdfUrl) {
-        throw new Error('No PDF files found for this product');
+      if (pdfFiles.length === 0) {
+        throw new Error("No PDF files found for this product");
       }
       
-      // Add a security token or timestamp to prevent caching and direct access attempts
-      const secureUrl = pdfUrl.includes('?') 
-        ? `${pdfUrl}&secure=true&t=${Date.now()}` 
-        : `${pdfUrl}?secure=true&t=${Date.now()}`;
+      // Determine which PDF to view
+      const selectedPdf = typeof downloadIndex === 'number' && downloadIndex < pdfFiles.length
+        ? pdfFiles[downloadIndex]
+        : pdfFiles[0]; // Default to the first one
+      
+      // Create a secure URL for the PDF (this could be a proxy or token-based URL)
+      const secureUrl = selectedPdf.file;
+      const pdfName = selectedPdf.name || product.name || "Document.pdf";
+      
+      console.log(`Opening PDF viewer for ${pdfName} at ${secureUrl}`);
       
       // Set state to show the PDF viewer with secure settings
-      setSelectedProductId(productId);
       setSelectedPdfDetails({
         url: secureUrl,
         name: pdfName,
-        preventDownload: true // Always enforce download protection
+        preventDownload: true,
+        productId: productId
       });
       setShowPdfViewer(true);
-      
-      // Toggle expanded state to show PDF details
-      toggleItemExpanded(productId);
     } catch (error) {
-      console.error('Error setting up PDF viewer:', error);
-      toast.error(error instanceof Error ? error.message : 'Failed to load PDF document');
+      console.error("Failed to load PDF document:", error);
+      toast.error(`Failed to load PDF document: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    } finally {
+      // Clear the loading state
+      setPdfLoadingStates(prev => ({
+        ...prev,
+        [productId]: false
+      }));
     }
   };
 
   // Implement a close handler for the PDF viewer
   const handleClosePdfViewer = () => {
     setShowPdfViewer(false);
-    setSelectedProductId(null);
     setSelectedPdfDetails(null);
   };
 
   // Toggle item expanded state
-  const toggleItemExpanded = (itemId: string) => {
-    setExpandedItems(prev => ({
-      ...prev,
-      [itemId]: !prev[itemId]
-    }));
-    
-    // If expanding and we don't have downloads for this product yet, fetch them
-    if (!expandedItems[itemId] && !productDownloads[itemId]) {
-      fetchProductDownloads(String(itemId));
-    }
-  };
 
   // Fetch product downloads from Firebase
-  const fetchProductDownloads = async (productId: string) => {
-    if (!db) {
-      console.error('Firebase Firestore instance not found');
-      return;
-    }
-
-    try {
-      setPdfLoadingStates(prev => ({...prev, [productId]: true}));
-      console.log(`Fetching downloads for product ID: ${productId}`);
-      
-      // Query the products collection directly by ID
-      const docRef = doc(db, 'products', productId);
-      const docSnap = await getDoc(docRef);
-      
-      if (docSnap.exists()) {
-        const productData = docSnap.data();
-        console.log('Found product data:', productData);
-        
-        // Store the product details
-        const productDoc = {
-          ...productData,
-          docId: docSnap.id,
-          id: productData.id || docSnap.id
-        };
-        
-        setProductDetails(prev => ({
-          ...prev,
-          [productId]: productDoc
-        }));
-        
-        // Extract PDF files from the product
-        const pdfs: Array<{id: string, name: string, file: string}> = [];
-        
-        // Check downloads array
-        if (productData.downloads && Array.isArray(productData.downloads)) {
-          productData.downloads.forEach((download: { id?: string; name?: string; file: string }) => {
-            if (download.file && download.file.toLowerCase().endsWith('.pdf')) {
-              pdfs.push({
-                id: download.id || `pdf-${Date.now()}-${pdfs.length}`,
-                name: download.name || 'PDF Document',
-                file: download.file
-              });
-            }
-          });
-        }
-        
-        // Check if there's a direct PDF URL
-        if (productData.pdfUrl && productData.pdfUrl.toLowerCase().endsWith('.pdf')) {
-          pdfs.push({
-            id: `pdf-direct-${Date.now()}`,
-            name: productData.name || 'PDF Document',
-            file: productData.pdfUrl
-          });
-        }
-        
-        // Check if there's a fileUrl that's a PDF
-        if (productData.fileUrl && productData.fileUrl.toLowerCase().endsWith('.pdf')) {
-          pdfs.push({
-            id: `pdf-file-${Date.now()}`,
-            name: productData.name || 'PDF Document',
-            file: productData.fileUrl
-          });
-        }
-        
-          setProductDownloads(prev => ({
-            ...prev,
-            [productId]: pdfs
-          }));
-        } else {
-        // Product not found - try to create a fallback entry using purchase data
-        console.log(`Product ${productId} not found in Firebase, using fallback data`);
-        
-        // Check if we already have fallback data
-        if (!productDetails[productId] || !productDetails[productId].isPlaceholder) {
-          // Find the original purchase item for this product
-          let originalItem: PurchaseItem | null = null;
-          
-          // Search through all purchases
-          for (const purchase of purchases) {
-            const foundItem = purchase.items.find((item: PurchaseItem) => String(item.id) === String(productId));
-            if (foundItem) {
-              originalItem = foundItem;
-              break;
-            }
-          }
-          
-          if (originalItem) {
-            // Create a fallback product entry
-            const fallbackProduct = {
-              id: productId,
-              docId: 'unknown',
-              name: originalItem.name || 'Unknown Product',
-              description: originalItem.description || 'Product details not available',
-              price: originalItem.price || '0',
-              imageUrl: originalItem.imageUrl || '',
-              category: originalItem.category || 'Resource',
-              isPlaceholder: true
-            };
-            
-            setProductDetails(prev => ({
-              ...prev,
-              [productId]: fallbackProduct
-            }));
-            
-            // If the original item has PDF data, use it
-            if (originalItem.downloads || originalItem.pdfUrl || originalItem.fileUrl) {
-              const pdfs: Array<{id: string, name: string, file: string}> = [];
-              
-              // Process downloads
-              if (originalItem.downloads && Array.isArray(originalItem.downloads)) {
-                originalItem.downloads.forEach((download: { id: string; name: string; file: string }) => {
-                  if (download.file && download.file.toLowerCase().endsWith('.pdf')) {
-                    pdfs.push({
-                      id: download.id || `pdf-${Date.now()}-${pdfs.length}`,
-                      name: download.name || 'PDF Document',
-                      file: download.file
-                    });
-                  }
-                });
-              }
-              
-              // Add direct PDF URL if available
-              if (originalItem.pdfUrl && originalItem.pdfUrl.toLowerCase().endsWith('.pdf')) {
-                pdfs.push({
-                  id: `pdf-direct-${Date.now()}`,
-                  name: originalItem.name || 'PDF Document',
-                  file: originalItem.pdfUrl
-                });
-              }
-              
-              // Add file URL if it's a PDF
-              if (originalItem.fileUrl && originalItem.fileUrl.toLowerCase().endsWith('.pdf')) {
-                pdfs.push({
-                  id: `pdf-file-${Date.now()}`,
-                  name: originalItem.name || 'PDF Document',
-                  file: originalItem.fileUrl
-                });
-              }
-              
-              if (pdfs.length > 0) {
-                setProductDownloads(prev => ({
-                  ...prev,
-                  [productId]: pdfs
-                }));
-              }
-            }
-          }
-        }
-      }
-    } catch (error) {
-      console.error(`Error fetching product details for ${productId}:`, error);
-    } finally {
-      setPdfLoadingStates(prev => ({...prev, [productId]: false}));
-    }
-  };
 
   // Check if a purchase item has PDF files
   const hasPdfFiles = (item: PurchaseItem): boolean => {
@@ -1407,17 +1190,7 @@ const UserPurchasesPage: React.FC = () => {
   };
 
   // Add the missing findPurchaseItemById function
-  const findPurchaseItemById = (productId: string): PurchaseItem | null => {
-    for (const purchase of purchases) {
-      if (purchase.items && Array.isArray(purchase.items)) {
-        const foundItem = purchase.items.find((item: PurchaseItem) => String(item.id) === productId);
-        if (foundItem) {
-          return foundItem;
-        }
-      }
-    }
-    return null;
-  };
+
 
   // If user is not logged in, show a message
   if (!isLoggedIn) {
@@ -1747,17 +1520,17 @@ const UserPurchasesPage: React.FC = () => {
         )}
         
         {/* PDF Viewer */}
-        {showPdfViewer && selectedPdfDetails && selectedProductId && (
-        <SecurePdfViewer 
-          productId={selectedProductId}
-          pdfDetails={{
-            url: selectedPdfDetails.url,
-            name: selectedPdfDetails.name,
-              preventDownload: true
-          }}
+        {showPdfViewer && selectedPdfDetails && (
+          <SecurePdfViewer 
+            productId={selectedPdfDetails.productId || ''}
+            pdfDetails={{
+              url: selectedPdfDetails.url,
+              name: selectedPdfDetails.name,
+              preventDownload: selectedPdfDetails.preventDownload
+            }}
             onClose={handleClosePdfViewer}
-        />
-      )}
+          />
+        )}
       </main>
 
       <Footer />
