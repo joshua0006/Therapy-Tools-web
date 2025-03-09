@@ -81,7 +81,12 @@ export async function saveUserProfile(userId: string, userData: any) {
 /**
  * Get user profile data from Firestore
  */
-export async function getUserProfile(userId: string) {
+export async function getUserProfile(userId: string): Promise<{
+  id: string;
+  billingAddresses?: BillingAddress[];
+  shippingAddresses?: ShippingAddress[];
+  [key: string]: any;
+} | null> {
   const userRef = doc(usersCollection, userId);
   const userSnap = await getDoc(userRef);
   

@@ -1,10 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate, useLocation, Link } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import Header from './Header';
 import Footer from './Footer';
 import Button from './Button';
-// import StripePayment from './StripePayment';
-import { CreditCard, CircleDollarSign, ShieldCheck, CheckCircle, ArrowLeft, ChevronDown, ChevronUp, Lock } from 'lucide-react';
+import { CreditCard } from 'lucide-react';
 import { useCart, CartItem } from '../context/CartContext';
 import { useAuth, ShippingAddress } from '../context/AuthContext';
 import { toast } from 'react-hot-toast';
@@ -974,13 +973,17 @@ const CheckoutPage: React.FC<CheckoutPageProps> = ({ productId }) => {
               
               <div className="bg-white rounded-lg shadow-sm p-6">
                 <div className="flex items-center justify-center gap-2 mb-4">
-                  <ShieldCheck className="h-5 w-5 text-green-600" />
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                  </svg>
                   <span className="text-base font-medium text-gray-800">Secure Checkout</span>
                 </div>
                 
                 <div className="flex justify-center mb-4">
                   <div className="flex items-center space-x-4">
-                    <ShieldCheck className="w-5 h-5 text-[#2bcd82]" />
+                    <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5 text-[#2bcd82]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15l8.286-8.286a1 1 0 000-1.414l-4-4a1 1 0 00-1.414 0l-8.286 8.286a1 1 0 000 1.414l4 4a1 1 0 001.414 0z" />
+                    </svg>
                     <span className="text-sm text-gray-600">Secure credit card payment</span>
                     <div className="flex items-center space-x-1">
                       <img src="https://cdn.iconscout.com/icon/free/png-256/free-visa-3-226460.png" alt="Visa" className="h-6" />
@@ -1011,7 +1014,9 @@ const CheckoutPage: React.FC<CheckoutPageProps> = ({ productId }) => {
           <div>
             <div className="mb-5 flex items-center">
               <div className="w-10 h-10 rounded-full bg-[#f0fdf4] flex items-center justify-center mr-3">
-                <CreditCard className="w-5 h-5 text-[#2bcd82]" />
+                <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5 text-[#2bcd82]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15l8.286-8.286a1 1 0 000-1.414l-4-4a1 1 0 00-1.414 0l-8.286 8.286a1 1 0 000 1.414l4 4a1 1 0 001.414 0z" />
+                </svg>
               </div>
               <div className="flex-1">
                 <span className="font-medium block text-gray-800">Credit/Debit Card</span>
@@ -1041,7 +1046,9 @@ const CheckoutPage: React.FC<CheckoutPageProps> = ({ productId }) => {
                     onChange={handleCardNumberChange}
                   />
                   <div className="absolute left-0 top-0 h-full flex items-center pl-3">
-                    <CreditCard className="w-4 h-4 text-gray-400" />
+                    <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15l8.286-8.286a1 1 0 000-1.414l-4-4a1 1 0 00-1.414 0l-8.286 8.286a1 1 0 000 1.414l4 4a1 1 0 001.414 0z" />
+                    </svg>
                   </div>
                 </div>
                 {cardError.number && (

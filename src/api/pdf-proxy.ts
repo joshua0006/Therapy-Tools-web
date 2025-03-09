@@ -1,7 +1,7 @@
-import { Request, Response } from 'express';
+import type { Request, Response } from 'express';
 import fetch from 'node-fetch';
-import { firestore } from '../lib/firebase';
-import { getDoc, doc } from 'firebase/firestore';
+import { getFirestore } from 'firebase/firestore';
+import { app } from '../lib/firebase';
 
 /**
  * PDF Proxy API endpoint

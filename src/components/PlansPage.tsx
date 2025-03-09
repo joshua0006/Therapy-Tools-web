@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import Header from './Header';
 import Footer from './Footer';
 import Button from './Button';
-import { Check, Star, Shield, Zap, FileText, Headphones, Award, Calendar, AlertCircle, CheckCircle } from 'lucide-react';
+import { Check, Star, Shield, Zap, FileText, Headphones, Award, Calendar, CheckCircle } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 
 interface PlanFeature {

@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { ShoppingBag, CreditCard, LogIn, User, Menu, X, Bell, BookOpen, ShoppingCart } from 'lucide-react';
+import { ShoppingBag, CreditCard, LogIn, User, Menu, X, Bell, ShoppingCart } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import Logo from '../assets/images/cicle-logo.png';
 
