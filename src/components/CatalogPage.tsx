@@ -504,11 +504,7 @@ const CatalogPage: React.FC = () => {
                     </div>
                   )}
                   
-                  {/* Subscription badge instead of sale tag */}
-                  <div className="absolute top-0 right-0 bg-[#2bcd82] text-white px-3 py-1 rounded-bl-lg text-sm font-bold flex items-center">
-                    <Tag className="w-4 h-4 mr-1" />
-                    INCLUDED
-                  </div>
+                 
                 </div>
                 
                 <div className="p-5 flex flex-col flex-grow">

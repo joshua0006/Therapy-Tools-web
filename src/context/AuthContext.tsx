@@ -147,6 +147,8 @@ interface AuthContextType {
   getShippingInfo: () => Promise<ShippingAddress[]>;
   isSubscriptionActive: () => boolean;
   getSubscriptionRemainingDays: () => number;
+  saveLastVisitedPath: (path: string) => void;
+  getLastVisitedPath: () => string | null;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -556,7 +558,20 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         saveShippingInfo,
         getShippingInfo,
         isSubscriptionActive: () => isSubscriptionActive(user),
-        getSubscriptionRemainingDays: () => getSubscriptionRemainingDays(user)
+        getSubscriptionRemainingDays: () => getSubscriptionRemainingDays(user),
+        saveLastVisitedPath: (path: string) => {
+          if (path.includes('/checkout')) {
+            sessionStorage.setItem('lastVisitedPath', path);
+            console.log('Saved last visited checkout path for redirect after login:', path);
+          }
+        },
+        getLastVisitedPath: () => {
+          const path = sessionStorage.getItem('lastVisitedPath');
+          if (path) {
+            sessionStorage.removeItem('lastVisitedPath');
+          }
+          return path;
+        }
       }}
     >
       {children}

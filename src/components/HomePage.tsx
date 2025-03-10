@@ -109,8 +109,9 @@ const HomePage: React.FC = () => {
   const navigate = useNavigate();
   const { featuredProducts, loading: productsLoading } = useWooCommerce();
   const { 
+    news,
     events,
-    featuredEvent, 
+    featuredEvent,
     featuredNews, 
     loading: eventsNewsLoading 
   } = useEventsNews();
@@ -120,8 +121,8 @@ const HomePage: React.FC = () => {
   // Carousel state
   const [currentSlide, setCurrentSlide] = useState(0);
   
-  // Use events for the carousel instead of products
-  const carouselEvents = events.slice(0, 4);
+  // Use news for the carousel instead of products
+  const carouselNews = news.slice(0, 4);
 
   // Mark page as loaded once data is ready
   useEffect(() => {
@@ -139,23 +140,23 @@ const HomePage: React.FC = () => {
     if (!isPageLoaded) return;
     
     const interval = setInterval(() => {
-      if (carouselEvents.length > 0) {
-        setCurrentSlide((prev) => (prev + 1) % carouselEvents.length);
+      if (carouselNews.length > 0) {
+        setCurrentSlide((prev) => (prev + 1) % carouselNews.length);
       }
     }, 5000);
     return () => clearInterval(interval);
-  }, [carouselEvents.length, isPageLoaded]);
+  }, [carouselNews.length, isPageLoaded]);
 
   // Manual navigation
   const prevSlide = () => {
-    if (carouselEvents.length > 0) {
-      setCurrentSlide((prev) => (prev === 0 ? carouselEvents.length - 1 : prev - 1));
+    if (carouselNews.length > 0) {
+      setCurrentSlide((prev) => (prev === 0 ? carouselNews.length - 1 : prev - 1));
     }
   };
 
   const nextSlide = () => {
-    if (carouselEvents.length > 0) {
-      setCurrentSlide((prev) => (prev + 1) % carouselEvents.length);
+    if (carouselNews.length > 0) {
+      setCurrentSlide((prev) => (prev + 1) % carouselNews.length);
     }
   };
 
@@ -204,70 +205,65 @@ const HomePage: React.FC = () => {
               </div>
             </div>
             <div className="md:w-1/2 flex justify-center">
-              {/* Events Carousel */}
+              {/* News Carousel */}
               <div className="relative w-full">
                 <div className="rounded-lg overflow-hidden shadow-xl h-[28rem] w-full relative">
                   {eventsNewsLoading ? (
                     <CarouselSkeleton />
                   ) : (
-                    carouselEvents.map((event, index) => (
+                    carouselNews.map((newsItem, index) => (
                       <div 
-                        key={event.id}
+                        key={newsItem.id}
                         className={`absolute inset-0 transition-opacity duration-1000 ${
-                          index === currentSlide ? 'opacity-100' : 'opacity-0'
+                          index === currentSlide ? 'opacity-100 z-10' : 'opacity-0 z-0'
                         }`}
                       >
                         <img 
-                          src={event.image || "https://images.unsplash.com/photo-1503676260728-1c00da094a0b?ixlib=rb-1.2.1&auto=format&fit=crop&w=800&q=80"} 
-                          alt={event.title} 
+                          src={newsItem.image || "https://images.unsplash.com/photo-1512758017271-d7b84c2113f1?ixlib=rb-1.2.1&auto=format&fit=crop&w=800&q=80"} 
+                          alt={newsItem.title} 
                           className="w-full h-full object-cover"
                         />
-                        {/* Event Info Overlay */}
+                        {/* News Info Overlay */}
                         <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/70 to-transparent p-6 text-white">
                           <span className="px-3 py-1 rounded-full text-xs font-medium bg-[#2bcd82]/20 text-white mb-2 inline-block">
-                            Event
+                            News
                           </span>
-                          <h3 className="text-2xl font-bold mb-4">{event.title}</h3>
-                          <button 
-                            className="bg-[#2bcd82] hover:bg-[#25b975] text-white font-medium py-2 px-4 rounded"
-                            onClick={(e) => {
-                              e.stopPropagation(); // Prevent triggering the parent div's onClick
-                              navigate('/events-news', { 
-                                state: { 
-                                  activeTab: 'events',
-                                  selectedEventId: event.id 
-                                } 
-                              });
-                            }}
+                          <h3 className="text-2xl font-bold mb-2">{newsItem.title}</h3>
+                          <p className="text-sm mb-4 line-clamp-2">{newsItem.summary}</p>
+                          <a 
+                            href={newsItem.readMoreLink}
+                            target="_blank" 
+                            rel="noopener noreferrer"
+                            className="inline-block bg-[#2bcd82] hover:bg-[#25b975] text-white font-medium py-2 px-4 rounded transition-colors relative z-20 cursor-pointer"
                           >
-                            Learn More
-                          </button>
+                            Read More
+                          </a>
                         </div>
                       </div>
                     ))
                   )}
                   
-                  {/* Carousel Controls */}
-                  <div className="absolute inset-0 flex items-center justify-between p-4">
+                  {/* Carousel Controls - Make sure these don't overlap the Read More button */}
+                  <div className="absolute inset-0 flex items-center justify-between p-4 z-30 pointer-events-none">
                     <button 
                       onClick={prevSlide}
-                      className="p-3 rounded-full bg-white/40 hover:bg-white/70 transition-colors text-gray-800"
+                      className="p-3 rounded-full bg-white/40 hover:bg-white/70 transition-colors text-gray-800 pointer-events-auto"
                       aria-label="Previous slide"
                     >
                       <ChevronLeft className="w-7 h-7" />
                     </button>
                     <button 
                       onClick={nextSlide}
-                      className="p-3 rounded-full bg-white/40 hover:bg-white/70 transition-colors text-gray-800"
+                      className="p-3 rounded-full bg-white/40 hover:bg-white/70 transition-colors text-gray-800 pointer-events-auto"
                       aria-label="Next slide"
                     >
                       <ChevronRight className="w-7 h-7" />
                     </button>
                   </div>
                   
-                  {/* Carousel Indicators */}
-                  <div className="absolute bottom-20 left-0 right-0 flex justify-center space-x-2">
-                    {carouselEvents.map((_, index) => (
+                  {/* Carousel Indicators - adjust to not block button */}
+                  <div className="absolute bottom-24 left-0 right-0 flex justify-center space-x-2 z-30">
+                    {carouselNews.map((_, index) => (
                       <button
                         key={index}
                         className={`w-3 h-3 rounded-full ${
@@ -469,7 +465,7 @@ const HomePage: React.FC = () => {
             </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-              {/* Events Card - Updated to match EventsNewsPage design */}
+              {/* Events Card */}
               {featuredEvent && (
                 <div className="bg-white rounded-lg shadow-md overflow-hidden border border-gray-100">
                   <div className="md:flex h-full">
@@ -512,7 +508,7 @@ const HomePage: React.FC = () => {
                 </div>
               )}
               
-              {/* News Card - Updated to match EventsNewsPage design */}
+              {/* News Card */}
               {featuredNews && (
                 <div className="bg-white rounded-lg shadow-md overflow-hidden border border-gray-100">
                   <div className="md:flex h-full">

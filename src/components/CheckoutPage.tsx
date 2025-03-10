@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import Header from './Header';
 import Footer from './Footer';
@@ -24,7 +24,6 @@ const CheckoutPage: React.FC<CheckoutPageProps> = ({ productId }) => {
   const [paymentId, setPaymentId] = useState<string | null>(null);
   const [isCartLoaded, setIsCartLoaded] = useState(false);
   const [isLoading, setIsLoading] = useState<boolean>(false);
-  const [step, setStep] = useState<'contact' | 'payment'>('contact');
   
   // Card payment form state
   const [cardNumber, setCardNumber] = useState('');
@@ -47,6 +46,9 @@ const CheckoutPage: React.FC<CheckoutPageProps> = ({ productId }) => {
   // Add a new state for the "set as default" prompt
   const [showSetDefaultPrompt, setShowSetDefaultPrompt] = useState<boolean>(false);
   const [newAddressCompleted, setNewAddressCompleted] = useState<boolean>(false);
+
+  // Use the useAuth hook instead of direct context consumption
+  const auth = useAuth();
 
   // Handle contact info change
   const handleContactInfoChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
@@ -113,9 +115,9 @@ const CheckoutPage: React.FC<CheckoutPageProps> = ({ productId }) => {
     },
     {
       id: 'premium',
-      name: 'Premium Plan',
-      description: 'Complete solution for speech pathology professionals',
-      amount: priceAmount || 9900, // Use price from URL or default to $99 if missing
+      name: 'Speech Therapy Premium Access',
+      description: 'Subscription to all premium resources',
+      amount: priceAmount || 2499, // Default price is $24.99 instead of $99
       imageUrl: 'https://images.unsplash.com/photo-1454165804606-c3d57bc86b40?ixlib=rb-1.2.1&auto=format&fit=crop&w=800&q=80'
     }
   ];
@@ -150,23 +152,16 @@ const CheckoutPage: React.FC<CheckoutPageProps> = ({ productId }) => {
     : (selectedPlan?.amount || 1999);
   
   // Use selected plan if no cart items
-  const product = !showCartItems && selectedPlan ? {
-    id: selectedPlan.id,
-    name: selectedPlan.name,
-    description: billingCycle === 'yearly' 
-      ? `Annual ${selectedPlan.description}` 
-      : `Monthly ${selectedPlan.description}`,
-    amount: selectedPlan.amount,
-    displayPrice: displayPrice || undefined,
-    billingCycle: billingCycle,
-    imageUrl: selectedPlan.imageUrl
-  } : {
-    id: productId || 'default-product',
-    name: 'Speech Therapy Premium Plan',
-    description: 'Subscription to all premium resources',
-    amount: 9900, // $99.00 in cents
-    imageUrl: 'https://images.unsplash.com/photo-1434030216411-0b793f4b4173?ixlib=rb-1.2.1&auto=format&fit=crop&w=800&q=80'
-  };
+  const product = useMemo(() => {
+    return {
+      id: planId || 'premium-plan',
+      name: planId === 'premium-plan' ? 'Speech Therapy Premium Access' : 'Premium Access',
+      description: 'Subscription to all premium resources',
+      amount: priceAmount || 2499, // Default price is $24.99 instead of $99
+      billingCycle: billingCycle || 'monthly',
+      imageUrl: 'https://images.unsplash.com/photo-1454165804606-c3d57bc86b40?ixlib=rb-1.2.1&auto=format&fit=crop&w=800&q=80'
+    };
+  }, [planId, priceAmount, billingCycle]);
 
   const handlePaymentMethodSelect = (method: 'stripe') => {
     setPaymentMethod(method);
@@ -351,6 +346,10 @@ const CheckoutPage: React.FC<CheckoutPageProps> = ({ productId }) => {
   
   // Handle card payment submission
   const handleCardPayment = () => {
+    // Clear any previous payment errors
+    setPaymentError(null);
+    
+    // Run full validation before processing payment
     if (validateCardForm()) {
       setIsProcessing(true);
       
@@ -378,6 +377,13 @@ const CheckoutPage: React.FC<CheckoutPageProps> = ({ productId }) => {
         console.log('Payment data:', paymentData);
         handlePaymentComplete(true, "card_" + Math.random().toString(36).substring(2, 15));
       }, 1500);
+    } else {
+      // If validation fails, display a general error
+      if (!contactInfo.email || !termsAgreed) {
+        setPaymentError("Please complete all required fields and accept the terms of service.");
+      } else {
+        setPaymentError("Please check your card details and try again.");
+      }
     }
   };
 
@@ -396,26 +402,109 @@ const CheckoutPage: React.FC<CheckoutPageProps> = ({ productId }) => {
     }
   }, [isLoggedIn, navigate, location.pathname]);
 
-  // Check if the form is valid before proceeding to payment
-  const isAddressFormValid = (): boolean => {
+  // Update handleContinueToPayment to simply validate the form without calling validateCardForm
+  const validateCheckoutForm = (): boolean => {
+    // Don't call validateCardForm() here, just check basic conditions
     return !!contactInfo.email && termsAgreed;
   };
-  
-  // Handle continuing to the payment step
-  const handleContinueToPayment = () => {
-    if (isAddressFormValid()) {
-      setStep('payment');
-    } else {
-      toast.error('Please fill in your email and accept the terms of service.');
-    }
+
+  // Create a new function to check if the card data seems valid without updating state
+  const isCardDataValid = (): boolean => {
+    return (
+      !!cardNumber && cardNumber.replace(/\s/g, '').length >= 16 &&
+      !!cardExpiry && cardExpiry.includes('/') &&
+      !!cardCvc && cardCvc.length >= 3
+    );
   };
+
+  // Add a useEffect to preserve checkout parameters in local storage
+  useEffect(() => {
+    // Save current checkout parameters to localStorage when they change
+    if (billingCycle && planId) {
+      const checkoutParams = {
+        planId,
+        billingCycle,
+        priceParam,
+        displayPrice
+      };
+      localStorage.setItem('checkoutParams', JSON.stringify(checkoutParams));
+    }
+  }, [planId, billingCycle, priceParam, displayPrice]);
+
+  // Add a useEffect to restore checkout parameters from localStorage on page load
+  useEffect(() => {
+    // Only restore from localStorage if URL params are missing
+    if (!planId && !location.search.includes('plan=')) {
+      const savedParams = localStorage.getItem('checkoutParams');
+      if (savedParams) {
+        try {
+          const params = JSON.parse(savedParams);
+          // If we don't have URL params but have saved params, redirect to include them
+          if (params.planId) {
+            // Construct URL with saved parameters
+            const searchParams = new URLSearchParams();
+            if (params.planId) searchParams.append('plan', params.planId);
+            if (params.billingCycle) searchParams.append('billing', params.billingCycle);
+            if (params.priceParam) searchParams.append('price', params.priceParam);
+            if (params.displayPrice) searchParams.append('display_price', params.displayPrice);
+            
+            // Redirect to the same page but with the parameters in URL
+            navigate(`${location.pathname}?${searchParams.toString()}`, { replace: true });
+          }
+        } catch (e) {
+          console.error("Error restoring checkout parameters:", e);
+          localStorage.removeItem('checkoutParams');
+        }
+      }
+    }
+  }, [navigate, location.pathname, planId]);
+
+  // Save the current checkout URL path if user is not logged in
+  useEffect(() => {
+    if (auth && !auth.isLoggedIn) {
+      auth.saveLastVisitedPath(window.location.pathname + window.location.search);
+    }
+  }, [auth, location.pathname, location.search]);
+  
+  // Check for redirect after login
+  useEffect(() => {
+    if (auth && auth.isLoggedIn) {
+      const lastPath = auth.getLastVisitedPath();
+      if (lastPath && lastPath.includes('/checkout')) {
+        navigate(lastPath, { replace: true });
+      }
+    }
+  }, [auth?.isLoggedIn, navigate]);
 
   return (
     <div className="bg-[#f8f9fa]">
       <Header />
       
       <div className="container mx-auto px-4 py-8 md:py-12">
-        <h1 className="text-2xl md:text-3xl font-bold text-center mb-8 text-[#2d3748]">Checkout</h1>
+        <div className="text-center max-w-3xl mx-auto mb-10">
+          <h1 className="text-2xl md:text-3xl font-bold mb-4 text-[#2d3748]">Subscribe to Premium Access</h1>
+          <p className="text-gray-600 mb-6">Join thousands of speech therapy professionals who trust our premium resources</p>
+          <div className="flex flex-wrap justify-center gap-2 mb-6">
+            <span className="inline-flex items-center px-3 py-1 rounded-full bg-blue-50 text-blue-700 text-xs font-medium">
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4M7.835 4.697a3.42 3.42 0 001.946-.806 3.42 3.42 0 014.438 0 3.42 3.42 0 001.946.806 3.42 3.42 0 013.138 3.138 3.42 3.42 0 00.806 1.946 3.42 3.42 0 010 4.438 3.42 3.42 0 00-.806 1.946 3.42 3.42 0 01-3.138 3.138 3.42 3.42 0 00-1.946.806 3.42 3.42 0 01-4.438 0 3.42 3.42 0 00-1.946-.806 3.42 3.42 0 01-3.138-3.138 3.42 3.42 0 00-.806-1.946 3.42 3.42 0 010-4.438 3.42 3.42 0 00.806-1.946 3.42 3.42 0 013.138-3.138z" />
+              </svg>
+              Unlimited Downloads
+            </span>
+            <span className="inline-flex items-center px-3 py-1 rounded-full bg-green-50 text-green-700 text-xs font-medium">
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+              </svg>
+              Cancel Anytime
+            </span>
+            <span className="inline-flex items-center px-3 py-1 rounded-full bg-purple-50 text-purple-700 text-xs font-medium">
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+              </svg>
+              New Resources Monthly
+            </span>
+          </div>
+        </div>
         
         {isLoading && (
           <div className="fixed inset-0 bg-gray-900 bg-opacity-50 flex items-center justify-center z-50">
@@ -454,7 +543,7 @@ const CheckoutPage: React.FC<CheckoutPageProps> = ({ productId }) => {
             <div className="w-full lg:w-7/12 order-2 lg:order-1">
               {/* Your Information Section */}
               <div className="bg-white rounded-lg shadow-sm p-6 mb-6">
-                <h2 className="text-xl font-semibold mb-4 pb-3 border-b border-gray-100">Your Information</h2>
+                <h2 className="text-xl font-semibold mb-4 pb-3 border-b border-gray-100">Account Details</h2>
                 
                 <div className="mb-4">
                   <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-1">
@@ -469,7 +558,109 @@ const CheckoutPage: React.FC<CheckoutPageProps> = ({ productId }) => {
                     className="w-full p-3 border border-gray-300 rounded-md focus:ring-1 focus:ring-[#2bcd82] focus:border-[#2bcd82] transition-colors"
                     required
                   />
-                  <p className="mt-1 text-xs text-gray-500">Your receipt and download links will be sent to this email</p>
+                  <p className="mt-1 text-xs text-gray-500">We'll send your receipt, login details, and subscription information to this email</p>
+                </div>
+                
+                {/* Add Subscription Information */}
+                <div className="bg-yellow-50 rounded-lg p-4 mb-6">
+                  <h3 className="text-sm font-semibold text-yellow-800 mb-2 flex items-center">
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                    About Your Subscription
+                  </h3>
+                  <ul className="text-sm text-yellow-700 space-y-2">
+                    <li className="flex items-start">
+                      <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-1.5 text-yellow-600 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                      </svg>
+                      <span>Your subscription will begin immediately after payment is processed</span>
+                    </li>
+                    <li className="flex items-start">
+                      <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-1.5 text-yellow-600 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+                      </svg>
+                      <span>You'll be billed {billingCycle === 'yearly' ? 'annually' : 'monthly'} until you cancel</span>
+                    </li>
+                    <li className="flex items-start">
+                      <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-1.5 text-yellow-600 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 11V7a4 4 0 118 0m-4 8v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2z" />
+                      </svg>
+                      <span>You can manage or cancel your subscription anytime from your account dashboard</span>
+                    </li>
+                  </ul>
+                </div>
+                
+                {/* Add Payment Details section - existing content */}
+                <div className="mt-8 mb-6">
+                  <h3 className="text-md font-semibold mb-4 pb-2 border-b border-gray-100">Payment Details</h3>
+                  
+                  <div className="mb-3 flex items-center">
+                    <div className="w-8 h-8 rounded-full bg-[#f0fdf4] flex items-center justify-center mr-3">
+                      <CreditCard className="w-4 h-4 text-[#2bcd82]" />
+                    </div>
+                    <div className="flex-1">
+                      <span className="font-medium block text-gray-800">Credit/Debit Card</span>
+                      <span className="text-xs text-gray-500">Secure payment via Stripe</span>
+                    </div>
+                    <div className="flex items-center space-x-1">
+                      <img src="https://cdn.jsdelivr.net/gh/stripe-samples/images@main/visa.svg" alt="Visa" className="h-6" />
+                      <img src="https://cdn.jsdelivr.net/gh/stripe-samples/images@main/mastercard.svg" alt="Mastercard" className="h-6" />
+                      <img src="https://cdn.jsdelivr.net/gh/stripe-samples/images@main/amex.svg" alt="Amex" className="h-6" />
+                    </div>
+                  </div>
+                  
+                  {paymentError && (
+                    <div className="bg-red-50 text-red-600 p-3 rounded-md mb-4 text-sm">
+                      {paymentError}
+                    </div>
+                  )}
+                  
+                  <div className="space-y-3">
+                    {/* Card Number Field */}
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Card Number</label>
+                      <div className="relative">
+                        <input
+                          type="text"
+                          placeholder="1234 5678 9012 3456"
+                          value={cardNumber}
+                          onChange={handleCardNumberChange}
+                          className={`w-full p-3 pr-10 border ${cardError.number ? 'border-red-500' : 'border-gray-300'} rounded-md focus:ring-1 focus:ring-[#2bcd82] focus:border-[#2bcd82] transition-colors`}
+                        />
+                        <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
+                          <CreditCard className="h-5 w-5 text-gray-400" />
+                        </div>
+                      </div>
+                      {cardError.number && <p className="mt-1 text-xs text-red-500">{cardError.number}</p>}
+                    </div>
+                    
+                    {/* Card Expiration and CVC Fields */}
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Expiration Date</label>
+                        <input
+                          type="text"
+                          placeholder="MM/YY"
+                          value={cardExpiry}
+                          onChange={handleCardExpiryChange}
+                          className={`w-full p-3 border ${cardError.expiry ? 'border-red-500' : 'border-gray-300'} rounded-md focus:ring-1 focus:ring-[#2bcd82] focus:border-[#2bcd82] transition-colors`}
+                        />
+                        {cardError.expiry && <p className="mt-1 text-xs text-red-500">{cardError.expiry}</p>}
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">CVC</label>
+                        <input
+                          type="text"
+                          placeholder="123"
+                          value={cardCvc}
+                          onChange={handleCardCvcChange}
+                          className={`w-full p-3 border ${cardError.cvc ? 'border-red-500' : 'border-gray-300'} rounded-md focus:ring-1 focus:ring-[#2bcd82] focus:border-[#2bcd82] transition-colors`}
+                        />
+                        {cardError.cvc && <p className="mt-1 text-xs text-red-500">{cardError.cvc}</p>}
+                      </div>
+                    </div>
+                  </div>
                 </div>
                 
                 {/* Terms and Privacy Agreement */}
@@ -487,128 +678,130 @@ const CheckoutPage: React.FC<CheckoutPageProps> = ({ productId }) => {
                     </div>
                     <div className="ml-3 text-sm">
                       <label htmlFor="terms" className="font-medium text-gray-700">
-                        I agree to the <a href="/terms" className="text-[#2bcd82] hover:underline" target="_blank" rel="noopener noreferrer">Terms of Service</a> and <a href="/privacy" className="text-[#2bcd82] hover:underline" target="_blank" rel="noopener noreferrer">Privacy Policy</a>
+                        I agree to the <a href="/terms" className="text-[#2bcd82] hover:underline" target="_blank" rel="noopener noreferrer">Terms of Service</a>, <a href="/privacy" className="text-[#2bcd82] hover:underline" target="_blank" rel="noopener noreferrer">Privacy Policy</a>, and Subscription Terms
                       </label>
                     </div>
                   </div>
                 </div>
                 
-                {step === 'contact' && (
-                  <div className="mt-6 flex justify-end">
-                    <Button
-                      variant="primary"
-                      size="large"
-                      onClick={handleContinueToPayment}
-                      disabled={!isAddressFormValid()}
-                    >
-                      Continue to Payment
-                    </Button>
-                  </div>
-                )}
+                <div className="mt-6">
+                  <button
+                    type="button"
+                    className={`w-full py-3 px-4 flex justify-center items-center rounded-md ${
+                      !validateCheckoutForm() || !isCardDataValid() || isProcessing
+                        ? 'bg-gray-400 cursor-not-allowed'
+                        : 'bg-[#2bcd82] hover:bg-[#25b975]'
+                    } text-white font-medium transition-colors`}
+                    disabled={!validateCheckoutForm() || !isCardDataValid() || isProcessing}
+                    onClick={handleCardPayment}
+                  >
+                    {isProcessing ? (
+                      <span className="inline-flex items-center">
+                        <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                        </svg>
+                        Processing...
+                      </span>
+                    ) : (
+                      <>
+                        Complete Payment
+                        <span className="ml-1 text-white">
+                          {showCartItems 
+                            ? `($${getTotalPrice().toFixed(2)})` 
+                            : displayPrice 
+                              ? `(${displayPrice})` 
+                              : `($${(product.amount / 100).toFixed(2)}${product.billingCycle === 'monthly' ? '/monthly' : '/yearly'})`
+                          }
+                        </span>
+                      </>
+                    )}
+                  </button>
+                  <p className="mt-3 text-xs text-center text-gray-500">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-3 h-3 inline mr-1">
+                      <path fillRule="evenodd" d="M12 1.5a5.25 5.25 0 00-5.25 5.25v3a3 3 0 00-3 3v6.75a3 3 0 003 3h10.5a3 3 0 003-3v-6.75a3 3 0 00-3-3v-3c0-2.9-2.35-5.25-5.25-5.25zm3.75 8.25v-3a3.75 3.75 0 10-7.5 0v3h7.5z" clipRule="evenodd" />
+                    </svg>
+                    Secured by 256-bit SSL encryption
+                  </p>
+                </div>
               </div>
               
-              {/* Payment Method Section - Only show when on payment step */}
-              {step === 'payment' && (
-                <div id="payment-section" className="bg-white rounded-lg shadow-sm p-6">
-                  <h2 className="text-xl font-semibold mb-4 pb-3 border-b border-gray-100">Payment Method</h2>
-                  
-                  <div>
-                    <div className="mb-5 flex items-center">
-                      <div className="w-10 h-10 rounded-full bg-[#f0fdf4] flex items-center justify-center mr-3">
-                        <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5 text-[#2bcd82]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15l8.286-8.286a1 1 0 000-1.414l-4-4a1 1 0 00-1.414 0l-8.286 8.286a1 1 0 000 1.414l4 4a1 1 0 001.414 0z" />
-                        </svg>
+              {/* Add Testimonials Section */}
+              <div className="bg-white rounded-lg shadow-sm p-6">
+                <h3 className="text-md font-semibold mb-4 text-center">Trusted by Speech Therapy Professionals</h3>
+                
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="bg-gray-50 p-4 rounded-lg">
+                    <div className="flex items-center mb-3">
+                      <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center mr-3 text-blue-600 font-bold">
+                        JD
                       </div>
-                      <div className="flex-1">
-                        <span className="font-medium block text-gray-800">Credit/Debit Card</span>
-                        <span className="text-xs text-gray-500">Visa, Mastercard, American Express</span>
-                      </div>
-                      <div className="flex items-center space-x-1">
-                        <img src="https://cdn.iconscout.com/icon/free/png-256/free-american-express-3-226448.png" alt="Amex" className="h-6 w-10" />
-                      </div>
-                    </div>
-                    
-                    {paymentError && (
-                      <div className="bg-red-50 text-red-600 p-3 rounded-md mb-4 text-sm">
-                        {paymentError}
-                      </div>
-                    )}
-                    
-                    <div className="mb-6 space-y-4">
-                      {/* Card Number Field */}
                       <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Card Number</label>
-                        <div className="relative">
-                          <input
-                            type="text"
-                            placeholder="1234 5678 9012 3456"
-                            value={cardNumber}
-                            onChange={handleCardNumberChange}
-                            className={`w-full p-3 pr-10 border ${cardError.number ? 'border-red-500' : 'border-gray-300'} rounded-md focus:ring-1 focus:ring-[#2bcd82] focus:border-[#2bcd82] transition-colors`}
-                          />
-                          <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
-                            <CreditCard className="h-5 w-5 text-gray-400" />
-                          </div>
-                        </div>
-                        {cardError.number && <p className="mt-1 text-xs text-red-500">{cardError.number}</p>}
-                      </div>
-                      
-                      {/* Card Expiration and CVC Fields */}
-                      <div className="grid grid-cols-2 gap-4">
-                        <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-1">Expiration Date</label>
-                          <input
-                            type="text"
-                            placeholder="MM/YY"
-                            value={cardExpiry}
-                            onChange={handleCardExpiryChange}
-                            className={`w-full p-3 border ${cardError.expiry ? 'border-red-500' : 'border-gray-300'} rounded-md focus:ring-1 focus:ring-[#2bcd82] focus:border-[#2bcd82] transition-colors`}
-                          />
-                          {cardError.expiry && <p className="mt-1 text-xs text-red-500">{cardError.expiry}</p>}
-                        </div>
-                        <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-1">CVC</label>
-                          <input
-                            type="text"
-                            placeholder="123"
-                            value={cardCvc}
-                            onChange={handleCardCvcChange}
-                            className={`w-full p-3 border ${cardError.cvc ? 'border-red-500' : 'border-gray-300'} rounded-md focus:ring-1 focus:ring-[#2bcd82] focus:border-[#2bcd82] transition-colors`}
-                          />
-                          {cardError.cvc && <p className="mt-1 text-xs text-red-500">{cardError.cvc}</p>}
-                        </div>
+                        <p className="font-medium text-gray-800">Jennifer D.</p>
+                        <p className="text-xs text-gray-500">Speech-Language Pathologist</p>
                       </div>
                     </div>
-                    
-                    <button
-                      type="button"
-                      className={`w-full py-3 px-4 flex justify-center items-center rounded-md ${isProcessing ? 'bg-gray-400 cursor-not-allowed' : 'bg-[#2bcd82] hover:bg-[#25b975]'} text-white font-medium transition-colors`}
-                      disabled={isProcessing}
-                      onClick={handleCardPayment}
-                    >
-                      {isProcessing ? (
-                        <>
-                          <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                          </svg>
-                          Processing...
-                        </>
-                      ) : `Pay $${showCartItems ? getTotalPrice().toFixed(2) : (product.amount / 100).toFixed(2)}`}
-                    </button>
-                    
-                    <div className="text-center text-xs text-gray-500 mt-4 space-y-2">
-                      <p>Your information is protected by 256-bit SSL encryption</p>
+                    <p className="text-sm text-gray-600 italic">"The premium resources have transformed my practice. My clients are more engaged and I save hours every week on preparation."</p>
+                    <div className="flex mt-2">
+                      <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-yellow-400" viewBox="0 0 20 20" fill="currentColor">
+                        <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
+                      </svg>
+                      <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-yellow-400" viewBox="0 0 20 20" fill="currentColor">
+                        <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
+                      </svg>
+                      <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-yellow-400" viewBox="0 0 20 20" fill="currentColor">
+                        <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
+                      </svg>
+                      <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-yellow-400" viewBox="0 0 20 20" fill="currentColor">
+                        <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
+                      </svg>
+                      <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-yellow-400" viewBox="0 0 20 20" fill="currentColor">
+                        <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
+                      </svg>
+                    </div>
+                  </div>
+                  
+                  <div className="bg-gray-50 p-4 rounded-lg">
+                    <div className="flex items-center mb-3">
+                      <div className="w-10 h-10 rounded-full bg-purple-100 flex items-center justify-center mr-3 text-purple-600 font-bold">
+                        MT
+                      </div>
+                      <div>
+                        <p className="font-medium text-gray-800">Michael T.</p>
+                        <p className="text-xs text-gray-500">Clinic Director</p>
+                      </div>
+                    </div>
+                    <p className="text-sm text-gray-600 italic">"Our entire team uses these resources daily. The subscription has paid for itself many times over in time saved and client satisfaction."</p>
+                    <div className="flex mt-2">
+                      <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-yellow-400" viewBox="0 0 20 20" fill="currentColor">
+                        <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
+                      </svg>
+                      <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-yellow-400" viewBox="0 0 20 20" fill="currentColor">
+                        <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
+                      </svg>
+                      <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-yellow-400" viewBox="0 0 20 20" fill="currentColor">
+                        <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
+                      </svg>
+                      <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-yellow-400" viewBox="0 0 20 20" fill="currentColor">
+                        <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
+                      </svg>
+                      <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-yellow-400" viewBox="0 0 20 20" fill="currentColor">
+                        <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
+                      </svg>
                     </div>
                   </div>
                 </div>
-              )}
+                
+                <div className="mt-6 text-center">
+                  <p className="text-sm text-gray-500">Join over 2,000 professionals who trust our resources</p>
+                </div>
+              </div>
             </div>
             
             {/* Right Column - Order Summary */}
             <div className="w-full lg:w-5/12 order-1 lg:order-2">
               <div className="bg-white rounded-lg shadow-sm p-6 mb-6 sticky top-4">
-                <h2 className="text-xl font-semibold mb-4 pb-3 border-b border-gray-100">Order Summary</h2>
+                <h2 className="text-xl font-semibold mb-4 pb-3 border-b border-gray-100">Your Subscription</h2>
                 
                 {showCartItems ? (
                   <div>
@@ -634,29 +827,86 @@ const CheckoutPage: React.FC<CheckoutPageProps> = ({ productId }) => {
                     </div>
                   </div>
                 ) : (
-                  <div className="flex items-center mb-6">
-                    <div className="w-20 h-20 rounded-md overflow-hidden mr-4 bg-gray-50">
-                      <img 
-                        src={product.imageUrl} 
-                        alt={product.name} 
-                        className="w-full h-full object-cover"
-                      />
+                  <>
+                    <div className="flex items-center mb-6">
+                      <div className="w-20 h-20 rounded-md overflow-hidden mr-4 bg-gray-50 flex items-center justify-center">
+                        <img 
+                          src={product.imageUrl} 
+                          alt={product.name} 
+                          className="w-full h-full object-cover"
+                        />
+                      </div>
+                      <div>
+                        <h3 className="font-bold text-gray-800">{product.name}</h3>
+                        <p className="text-gray-600 text-sm">{product.description}</p>
+                        <div className="flex items-center mt-2">
+                          <p className="text-[#fb6a69] font-bold">
+                            {displayPrice ? displayPrice : `$${(product.amount / 100).toFixed(2)}`}
+                            {billingCycle && !displayPrice && <span className="text-gray-500 font-normal text-sm">/{billingCycle}</span>}
+                          </p>
+                          {billingCycle === 'monthly' && (
+                            <span className="ml-2 text-xs bg-blue-50 text-blue-600 px-2 py-0.5 rounded-full">
+                              Most flexible
+                            </span>
+                          )}
+                          {billingCycle === 'yearly' && (
+                            <span className="ml-2 text-xs bg-green-50 text-green-600 px-2 py-0.5 rounded-full">
+                              Best value
+                            </span>
+                          )}
+                        </div>
+                      </div>
                     </div>
-                    <div>
-                      <h3 className="font-bold text-gray-800">{product.name}</h3>
-                      <p className="text-gray-600 text-sm">{product.description}</p>
-                      <p className="text-[#fb6a69] font-bold mt-2">
-                        ${(product.amount / 100).toFixed(2)}
-                        {billingCycle && <span className="text-gray-500 font-normal text-sm">/{billingCycle}</span>}
-                      </p>
+                    
+                    {/* Subscription Benefits Box */}
+                    <div className="bg-[#f8f9ff] p-4 rounded-lg mb-6">
+                      <h4 className="text-sm font-semibold text-gray-800 mb-3 flex items-center">
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-1 text-blue-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                        </svg>
+                        What's included:
+                      </h4>
+                      <ul className="space-y-2">
+                        <li className="flex text-sm">
+                          <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2 text-green-500 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                          </svg>
+                          <span className="text-gray-700">Access to 200+ premium resources</span>
+                        </li>
+                        <li className="flex text-sm">
+                          <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2 text-green-500 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                          </svg>
+                          <span className="text-gray-700">20+ new resources added monthly</span>
+                        </li>
+                        <li className="flex text-sm">
+                          <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2 text-green-500 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                          </svg>
+                          <span className="text-gray-700">Unlimited downloads & printable PDFs</span>
+                        </li>
+                        <li className="flex text-sm">
+                          <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2 text-green-500 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                          </svg>
+                          <span className="text-gray-700">Priority access to new materials</span>
+                        </li>
+                      </ul>
                     </div>
-                  </div>
+                  </>
                 )}
                 
                 <div className="border-t border-b border-gray-100 py-4 my-4">
                   <div className="flex justify-between items-center mb-2">
                     <span className="text-gray-600">Subtotal</span>
-                    <span className="font-medium">${showCartItems ? getTotalPrice().toFixed(2) : (product.amount / 100).toFixed(2)}</span>
+                    <span className="font-medium">
+                      {showCartItems 
+                        ? `$${getTotalPrice().toFixed(2)}` 
+                        : displayPrice 
+                          ? displayPrice.replace(/\/.*$/, '') // Remove any "/monthly" or "/yearly" suffix
+                          : `$${(product.amount / 100).toFixed(2)}`
+                      }
+                    </span>
                   </div>
                   
                   <div className="flex justify-between items-center">
@@ -667,7 +917,14 @@ const CheckoutPage: React.FC<CheckoutPageProps> = ({ productId }) => {
                 
                 <div className="flex justify-between items-center mb-4">
                   <span className="font-bold text-gray-800">Total</span>
-                  <span className="font-bold text-xl">${showCartItems ? getTotalPrice().toFixed(2) : (product.amount / 100).toFixed(2)}</span>
+                  <span className="font-bold text-xl">
+                    {showCartItems 
+                      ? `$${getTotalPrice().toFixed(2)}` 
+                      : displayPrice 
+                        ? displayPrice.replace(/\/.*$/, '') // Remove any "/monthly" or "/yearly" suffix
+                        : `$${(product.amount / 100).toFixed(2)}`
+                    }
+                  </span>
                 </div>
                 
                 <div className="bg-[#f0fdf4] p-3 rounded-md text-sm text-[#166534] mb-4">
@@ -675,8 +932,19 @@ const CheckoutPage: React.FC<CheckoutPageProps> = ({ productId }) => {
                     <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2 text-[#2bcd82]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                     </svg>
-                    <p>Your subscription begins immediately after payment</p>
+                    <div>
+                      <p className="font-medium">Your subscription begins immediately</p>
+                      <p className="text-xs mt-1 text-[#166534]/80">Cancel anytime before your next billing period</p>
+                    </div>
                   </div>
+                </div>
+                
+                {/* Add Satisfaction Guarantee */}
+                <div className="flex items-center text-xs text-gray-500 justify-center">
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-1 text-yellow-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+                  </svg>
+                  100% Satisfaction Guarantee • 14-Day Money Back
                 </div>
               </div>
             </div>

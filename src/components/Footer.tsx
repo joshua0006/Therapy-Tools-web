@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Mail, MapPin, Facebook, Instagram, Youtube, Tag } from 'lucide-react';
 import Logo from '../assets/images/cicle-logo.png';
@@ -9,20 +9,69 @@ import LeadCapture from './LeadCapture';
 const Footer: React.FC = () => {
   const { isLoggedIn } = useAuth();
   const { categories, loading } = useCategories();
+  const [leadCaptureSubmitted, setLeadCaptureSubmitted] = useState(false);
   
   // Get top categories (limit to 6 for display)
   const topCategories = categories
     .sort((a, b) => (b.count || 0) - (a.count || 0))
     .slice(0, 6);
 
+  // Handle the lead capture form submission
+  const handleLeadCaptureSubmit = async (name: string, email: string) => {
+    try {
+      console.log('Lead capture form submitted:', { name, email });
+      
+      // Track the event for analytics
+      if (typeof window !== 'undefined' && (window as any).gtag) {
+        (window as any).gtag('event', 'lead_capture', {
+          'event_category': 'engagement',
+          'event_label': '100 Speech Practices Download',
+          'value': 1
+        });
+      }
+      
+      // In a real app, you would send this data to your backend or email service
+      // Example API call (uncomment and customize in production):
+      /*
+      const response = await fetch('/api/lead-capture', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          name,
+          email,
+          source: '100 Speech Practices Download',
+          date: new Date().toISOString()
+        }),
+      });
+      
+      if (!response.ok) {
+        throw new Error('Failed to submit form');
+      }
+      */
+      
+      // For demo, simulate a successful submission
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      
+      // Mark as submitted for any conditional UI changes needed
+      setLeadCaptureSubmitted(true);
+      
+      return true; // Return success for the LeadCapture component
+    } catch (error) {
+      console.error('Error submitting lead capture form:', error);
+      return false; // Return failure for the LeadCapture component
+    }
+  };
+
   return (
     <footer className="bg-gray-800 text-white">
       {/* Lead Capture Section */}
       <LeadCapture 
-        onSubmit={(name, email) => {
-          // In a real app, you would submit this data to your backend
-          console.log('Lead capture form submitted:', { name, email });
-        }}
+        onSubmit={handleLeadCaptureSubmit}
+        title="Need free 100 Practices for Speech sheets?"
+        description="If you treat children with speech sound disorders and are looking for a quick way to get 100 practices, you will LOVE this 25-page freebie! Get your copy now!"
+        buttonText="Let's go!"
       />
 
       {/* Main Footer */}
