@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { ShoppingBag, CreditCard, LogIn, User, Menu, X, Bell, ShoppingCart } from 'lucide-react';
+import { ShoppingBag, CreditCard, LogIn, User, Menu, X, Bell, ShoppingCart, Bookmark } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import Logo from '../assets/images/cicle-logo.png';
 
@@ -46,8 +46,8 @@ const Header: React.FC = () => {
             
             {isLoggedIn && (
               <>
-                <Link to="/purchases" className="text-gray-700 hover:text-[#2bcd82] font-medium transition-colors flex items-center">
-                  <ShoppingCart className="w-5 h-5 mr-2" /> My Purchases
+                <Link to="/bookmarks" className="text-gray-700 hover:text-[#2bcd82] font-medium transition-colors flex items-center">
+                  <Bookmark className="w-5 h-5 mr-2" /> My Bookmarks
                 </Link>
               </>
             )}
@@ -134,11 +134,11 @@ const Header: React.FC = () => {
               {isLoggedIn && (
                 <>
                   <Link 
-                    to="/purchases" 
+                    to="/bookmarks" 
                     className="text-gray-700 hover:text-[#2bcd82] font-medium transition-colors flex items-center"
                     onClick={() => setMobileMenuOpen(false)}
                   >
-                    <ShoppingCart className="w-5 h-5 mr-2" /> My Purchases
+                    <Bookmark className="w-5 h-5 mr-2" /> My Bookmarks
                   </Link>
                 </>
               )}

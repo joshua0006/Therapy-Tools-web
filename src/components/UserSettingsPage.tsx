@@ -1,11 +1,12 @@
-import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import React, { useState, useEffect, useRef } from 'react';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth, ShippingAddress} from '../context/AuthContext';
 import { Eye, EyeOff, AlertCircle, CheckCircle, Save, Plus, MapPin, Edit, Trash } from 'lucide-react';
 import Header from './Header';
 import Footer from './Footer';
 import { toast } from 'react-hot-toast';
 import ShippingAddressCard from './ShippingAddressCard';
+import { updateUserMembership } from '../lib/firebase/auth';
 
 // Countries for dropdown
 const countries = [
@@ -71,9 +72,30 @@ interface FormErrors {
   country?: string;
 }
 
+// Define MembershipFormData interface
+interface MembershipFormData {
+  status: string;
+  plan: string;
+  billingCycle: 'monthly' | 'yearly';
+  joinDate: string;
+  expiryDate: string;
+  totalPurchases: number;
+  renewalCount: number;
+  totalSpend: number;
+}
+
 const UserSettingsPage: React.FC = () => {
   const navigate = useNavigate();
-  const { user, isLoggedIn, loading, getShippingInfo, saveShippingInfo } = useAuth();
+  const location = useLocation();
+  const { 
+    user, 
+    isLoggedIn, 
+    loading, 
+    getShippingInfo, 
+    saveShippingInfo,
+    isSubscriptionActive,
+    getSubscriptionRemainingDays 
+  } = useAuth();
   
   const [formData, setFormData] = useState<UserSettingsFormData>({
     firstName: '',
@@ -104,7 +126,20 @@ const UserSettingsPage: React.FC = () => {
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [passwordStrength, setPasswordStrength] = useState(0);
   const [submitting, setSubmitting] = useState(false);
-  const [activeTab, setActiveTab] = useState<'profile' | 'address' | 'shipping' | 'password'>('profile');
+  const [activeTab, setActiveTab] = useState<'profile' | 'address' | 'shipping' | 'password' | 'subscription'>('profile');
+  
+  // Add state for editing membership info
+  const [isEditingMembership, setIsEditingMembership] = useState(false);
+  const [membershipFormData, setMembershipFormData] = useState<MembershipFormData>({
+    status: 'inactive',
+    plan: 'none',
+    billingCycle: 'monthly',
+    joinDate: new Date().toISOString().split('T')[0],
+    expiryDate: new Date().toISOString().split('T')[0],
+    totalPurchases: 0,
+    renewalCount: 0,
+    totalSpend: 0
+  });
   
   useEffect(() => {
     if (!loading && !isLoggedIn) {
@@ -117,6 +152,33 @@ const UserSettingsPage: React.FC = () => {
       loadShippingAddresses();
     }
   }, [isLoggedIn, user]);
+  
+  // Add useEffect to check URL for tab parameter
+  useEffect(() => {
+    const searchParams = new URLSearchParams(location.search);
+    const tabParam = searchParams.get('tab');
+    
+    if (tabParam === 'subscription') {
+      setActiveTab('subscription');
+    }
+  }, [location]);
+  
+  // Add useEffect to initialize membership form data
+  useEffect(() => {
+    if (user?.membershipInfo) {
+      const membershipInfo = user.membershipInfo;
+      setMembershipFormData({
+        status: user.subscription?.status || 'inactive',
+        plan: user.subscription?.plan || 'none',
+        billingCycle: user.subscription?.billingCycle || 'monthly',
+        joinDate: membershipInfo.joinDate ? new Date(membershipInfo.joinDate).toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
+        expiryDate: membershipInfo.expiryDate ? new Date(membershipInfo.expiryDate).toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
+        totalPurchases: membershipInfo.totalPurchases || 0,
+        renewalCount: membershipInfo.renewalCount || 0,
+        totalSpend: membershipInfo.totalSpend || 0
+      });
+    }
+  }, [user]);
   
   const loadShippingAddresses = async () => {
     try {
@@ -313,7 +375,7 @@ const UserSettingsPage: React.FC = () => {
   
   const renderTabs = () => {
     return (
-      <div className="border-b border-gray-200 mb-8">
+      <div className="border-b border-gray-200">
         <nav className="-mb-px flex space-x-8">
           <button
             onClick={() => setActiveTab('profile')}
@@ -327,17 +389,6 @@ const UserSettingsPage: React.FC = () => {
           </button>
           
           <button
-            onClick={() => setActiveTab('shipping')}
-            className={`py-4 px-1 border-b-2 font-medium text-sm ${
-              activeTab === 'shipping' 
-                ? 'border-[#2bcd82] text-[#2bcd82]' 
-                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-            }`}
-          >
-            Shipping Addresses
-          </button>
-          
-          <button
             onClick={() => setActiveTab('password')}
             className={`py-4 px-1 border-b-2 font-medium text-sm ${
               activeTab === 'password' 
@@ -346,6 +397,17 @@ const UserSettingsPage: React.FC = () => {
             }`}
           >
             Change Password
+          </button>
+          
+          <button
+            onClick={() => setActiveTab('subscription')}
+            className={`py-4 px-1 border-b-2 font-medium text-sm ${
+              activeTab === 'subscription' 
+                ? 'border-[#2bcd82] text-[#2bcd82]' 
+                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+            }`}
+          >
+            Manage Subscription
           </button>
         </nav>
       </div>
@@ -707,7 +769,7 @@ const UserSettingsPage: React.FC = () => {
                   setIsAddingNewAddress(false);
                   setIsEditingAddress(false);
                 }}
-                className="px-4 py-2 border border-gray-300 text-gray-700 rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[#2bcd82]"
+                className="px-4 py-2 border border-gray-300 text-gray-700 rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 transition-colors"
               >
                 Cancel
               </button>
@@ -715,22 +777,17 @@ const UserSettingsPage: React.FC = () => {
                 type="button"
                 onClick={handleSaveShippingAddress}
                 disabled={submitting}
-                className="px-4 py-2 bg-[#2bcd82] hover:bg-[#25b975] text-white rounded-md focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[#2bcd82] disabled:opacity-50 disabled:cursor-not-allowed flex items-center"
+                className="px-4 py-2 bg-[#2bcd82] text-white rounded-md hover:bg-[#25b975] focus:outline-none focus:ring-2 focus:ring-[#2bcd82] focus:ring-offset-2 transition-colors"
               >
                 {submitting ? (
-                  <>
+                  <span className="flex items-center justify-center">
                     <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
                       <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                       <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                     </svg>
                     Saving...
-                  </>
-                ) : (
-                  <>
-                    <Save className="h-4 w-4 mr-2" />
-                    Save Address
-                  </>
-                )}
+                  </span>
+                ) : 'Save Address'}
               </button>
             </div>
           </div>
@@ -872,22 +929,509 @@ const UserSettingsPage: React.FC = () => {
     }
   };
   
+  const handleCancelSubscription = async () => {
+    try {
+      setSubmitting(true);
+      
+      if (!user || !user.id) {
+        throw new Error('User not found');
+      }
+      
+      // Confirm the user wants to cancel
+      if (!window.confirm('Are you sure you want to cancel your subscription? You will lose access to premium content when your current billing period ends.')) {
+        setSubmitting(false);
+        return;
+      }
+      
+      // Get the current date for tracking
+      const now = new Date();
+      
+      // Update subscription status in Firebase
+      await updateUserMembership(user.id, {
+        status: 'canceled',
+        plan: user.subscription?.plan || 'none',
+        endDate: user.subscription?.endDate || now.toISOString(),
+        subscriptionToken: user.subscription?.token || null,
+        billingCycle: user.subscription?.billingCycle || 'monthly',
+      });
+      
+      // Show success message
+      toast.success('Your subscription has been canceled. You will have access until the end of your billing period.');
+      
+      // Refresh user data
+      await loadUserData();
+    } catch (error) {
+      console.error('Error canceling subscription:', error);
+      toast.error('Failed to cancel subscription. Please try again or contact support.');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+  
+  const loadUserData = async () => {
+    // This is just to refresh user data from context
+    // The actual data loading is handled in the AuthContext
+    if (isLoggedIn && user) {
+      // Any additional data loading can go here
+    }
+  };
+  
+  // Add membership form change handler
+  const handleMembershipChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
+    const { name, value } = e.target;
+    
+    // Convert number fields
+    if (['totalPurchases', 'renewalCount', 'totalSpend'].includes(name)) {
+      setMembershipFormData({
+        ...membershipFormData,
+        [name]: parseFloat(value) || 0
+      });
+    } else {
+      setMembershipFormData({
+        ...membershipFormData,
+        [name]: value
+      });
+    }
+  };
+  
+  // Add handler to save membership changes
+  const handleSaveMembershipChanges = async () => {
+    try {
+      setSubmitting(true);
+      
+      if (!user || !user.id) {
+        throw new Error('User not found');
+      }
+      
+      // Format join and expiry dates
+      const joinDate = new Date(membershipFormData.joinDate);
+      const expiryDate = new Date(membershipFormData.expiryDate);
+      
+      // Update membership info in Firebase
+      await updateUserMembership(user.id, {
+        status: membershipFormData.status,
+        plan: membershipFormData.plan,
+        endDate: expiryDate.toISOString(),
+        billingCycle: membershipFormData.billingCycle,
+        membershipInfo: {
+          joinDate: joinDate.toISOString(),
+          status: membershipFormData.status,
+          expiryDate: expiryDate.toISOString(),
+          updatedAt: new Date().toISOString(),
+          billingCycle: membershipFormData.billingCycle,
+          totalPurchases: membershipFormData.totalPurchases,
+          renewalCount: membershipFormData.renewalCount,
+          totalSpend: membershipFormData.totalSpend
+        }
+      });
+      
+      // Show success message
+      toast.success('Membership information updated successfully.');
+      
+      // Exit edit mode
+      setIsEditingMembership(false);
+      
+      // Refresh user data
+      await loadUserData();
+    } catch (error) {
+      console.error('Error updating membership information:', error);
+      toast.error('Failed to update membership information. Please try again.');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+  
+  const renderSubscriptionTab = () => {
+    // Get user's subscription info
+    const subscriptionStatus = user?.subscription?.status || 'inactive';
+    const subscriptionPlan = user?.subscription?.plan || 'none';
+    const subscriptionEndDate = user?.subscription?.endDate 
+      ? new Date(user.subscription.endDate).toLocaleDateString()
+      : 'N/A';
+    const billingCycle = user?.subscription?.billingCycle || 'monthly';
+    const isActive = isSubscriptionActive();
+    const daysRemaining = getSubscriptionRemainingDays();
+    
+    // Format price display with plan and billing cycle
+    const getFormattedPlan = () => {
+      if (!subscriptionPlan || subscriptionPlan === 'none') return 'No active plan';
+      
+      let planName = subscriptionPlan.charAt(0).toUpperCase() + subscriptionPlan.slice(1);
+      return `${planName} (${billingCycle.charAt(0).toUpperCase() + billingCycle.slice(1)})`;
+    };
+    
+    return (
+      <div className="space-y-8 py-8">
+        <div className="bg-white shadow-sm rounded-lg p-6">
+          <div className="flex justify-between items-center mb-6">
+            <h3 className="text-xl font-semibold text-gray-800">Subscription Information</h3>
+            
+            {/* Add Edit button for admin users */}
+            {user?.role === 'admin' && (
+              <button
+                onClick={() => setIsEditingMembership(!isEditingMembership)}
+                className="text-blue-600 hover:text-blue-800 text-sm font-medium flex items-center"
+              >
+                {isEditingMembership ? 'Cancel' : 'Edit Membership Info'}
+              </button>
+            )}
+          </div>
+          
+          {isEditingMembership ? (
+            /* Membership Edit Form */
+            <div className="space-y-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="space-y-1">
+                  <label className="block text-sm font-medium text-gray-700">Status</label>
+                  <select
+                    name="status"
+                    value={membershipFormData.status}
+                    onChange={handleMembershipChange}
+                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-[#2bcd82] focus:ring-[#2bcd82]"
+                  >
+                    <option value="active">Active</option>
+                    <option value="inactive">Inactive</option>
+                    <option value="canceled">Canceled</option>
+                    <option value="pending">Pending</option>
+                  </select>
+                </div>
+                
+                <div className="space-y-1">
+                  <label className="block text-sm font-medium text-gray-700">Plan</label>
+                  <select
+                    name="plan"
+                    value={membershipFormData.plan}
+                    onChange={handleMembershipChange}
+                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-[#2bcd82] focus:ring-[#2bcd82]"
+                  >
+                    <option value="none">None</option>
+                    <option value="premium">Premium</option>
+                    <option value="basic">Basic</option>
+                  </select>
+                </div>
+                
+                <div className="space-y-1">
+                  <label className="block text-sm font-medium text-gray-700">Billing Cycle</label>
+                  <select
+                    name="billingCycle"
+                    value={membershipFormData.billingCycle}
+                    onChange={handleMembershipChange}
+                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-[#2bcd82] focus:ring-[#2bcd82]"
+                  >
+                    <option value="monthly">Monthly</option>
+                    <option value="yearly">Yearly</option>
+                  </select>
+                </div>
+                
+                <div className="space-y-1">
+                  <label className="block text-sm font-medium text-gray-700">Join Date</label>
+                  <input
+                    type="date"
+                    name="joinDate"
+                    value={membershipFormData.joinDate}
+                    onChange={handleMembershipChange}
+                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-[#2bcd82] focus:ring-[#2bcd82]"
+                  />
+                </div>
+                
+                <div className="space-y-1">
+                  <label className="block text-sm font-medium text-gray-700">Expiry Date</label>
+                  <input
+                    type="date"
+                    name="expiryDate"
+                    value={membershipFormData.expiryDate}
+                    onChange={handleMembershipChange}
+                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-[#2bcd82] focus:ring-[#2bcd82]"
+                  />
+                </div>
+                
+                <div className="space-y-1">
+                  <label className="block text-sm font-medium text-gray-700">Total Purchases</label>
+                  <input
+                    type="number"
+                    name="totalPurchases"
+                    value={membershipFormData.totalPurchases}
+                    onChange={handleMembershipChange}
+                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-[#2bcd82] focus:ring-[#2bcd82]"
+                  />
+                </div>
+                
+                <div className="space-y-1">
+                  <label className="block text-sm font-medium text-gray-700">Renewal Count</label>
+                  <input
+                    type="number"
+                    name="renewalCount"
+                    value={membershipFormData.renewalCount}
+                    onChange={handleMembershipChange}
+                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-[#2bcd82] focus:ring-[#2bcd82]"
+                  />
+                </div>
+                
+                <div className="space-y-1">
+                  <label className="block text-sm font-medium text-gray-700">Total Spend</label>
+                  <input
+                    type="number"
+                    name="totalSpend"
+                    value={membershipFormData.totalSpend}
+                    onChange={handleMembershipChange}
+                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-[#2bcd82] focus:ring-[#2bcd82]"
+                  />
+                </div>
+              </div>
+              
+              <div className="flex justify-end space-x-3 pt-4 border-t border-gray-200">
+                <button
+                  onClick={() => setIsEditingMembership(false)}
+                  className="px-4 py-2 border border-gray-300 text-gray-700 rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleSaveMembershipChanges}
+                  disabled={submitting}
+                  className="px-4 py-2 bg-[#2bcd82] text-white rounded-md hover:bg-[#25b975] focus:outline-none focus:ring-2 focus:ring-[#2bcd82] focus:ring-offset-2 transition-colors"
+                >
+                  {submitting ? (
+                    <span className="flex items-center justify-center">
+                      <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                      </svg>
+                      Saving...
+                    </span>
+                  ) : 'Save Changes'}
+                </button>
+              </div>
+            </div>
+          ) : isActive ? (
+            // Active subscription view
+            <div className="space-y-6">
+              <div className="flex items-center">
+                <div className="bg-green-100 rounded-full p-2 mr-4">
+                  <svg className="w-6 h-6 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7"></path>
+                  </svg>
+                </div>
+                <div>
+                  <p className="text-sm text-gray-500">Status</p>
+                  <p className="font-medium text-green-600">Active</p>
+                </div>
+              </div>
+              
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="space-y-1">
+                  <p className="text-sm text-gray-500">Plan</p>
+                  <p className="font-medium text-gray-800">{getFormattedPlan()}</p>
+                </div>
+                
+                <div className="space-y-1">
+                  <p className="text-sm text-gray-500">Next Billing Date</p>
+                  <p className="font-medium text-gray-800">{subscriptionEndDate}</p>
+                </div>
+                
+                <div className="space-y-1">
+                  <p className="text-sm text-gray-500">Time Remaining</p>
+                  <p className="font-medium text-gray-800">{daysRemaining} days</p>
+                </div>
+                
+                <div className="space-y-1">
+                  <p className="text-sm text-gray-500">Billing Cycle</p>
+                  <p className="font-medium text-gray-800">
+                    {billingCycle.charAt(0).toUpperCase() + billingCycle.slice(1)}
+                  </p>
+                </div>
+              </div>
+              
+              {user?.membershipInfo && (
+                <div className="border-t border-gray-200 pt-4 mt-6">
+                  <h4 className="font-medium text-gray-800 mb-3">Membership Details</h4>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+                    <div>
+                      <p className="text-gray-500">Join Date</p>
+                      <p className="font-medium">
+                        {user.membershipInfo.joinDate ? new Date(user.membershipInfo.joinDate).toLocaleDateString() : 'N/A'}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-gray-500">Total Purchases</p>
+                      <p className="font-medium">{user.membershipInfo.totalPurchases || 0}</p>
+                    </div>
+                    <div>
+                      <p className="text-gray-500">Renewal Count</p>
+                      <p className="font-medium">{user.membershipInfo.renewalCount || 0}</p>
+                    </div>
+                    <div>
+                      <p className="text-gray-500">Total Spend</p>
+                      <p className="font-medium">
+                        ${typeof user.membershipInfo.totalSpend === 'number' 
+                          ? user.membershipInfo.totalSpend.toFixed(2) 
+                          : '0.00'}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )}
+              
+              <div className="pt-4 border-t border-gray-200">
+                <button
+                  onClick={handleCancelSubscription}
+                  disabled={submitting}
+                  className="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2 transition-colors"
+                >
+                  {submitting ? (
+                    <span className="flex items-center justify-center">
+                      <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                      </svg>
+                      Processing...
+                    </span>
+                  ) : 'Cancel Subscription'}
+                </button>
+              </div>
+            </div>
+          ) : (
+            // Inactive subscription view
+            <div className="space-y-6">
+              <div className="flex items-center">
+                <div className="bg-gray-100 rounded-full p-2 mr-4">
+                  <svg className="w-6 h-6 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12"></path>
+                  </svg>
+                </div>
+                <div>
+                  <p className="text-sm text-gray-500">Status</p>
+                  <p className="font-medium text-gray-600">
+                    {subscriptionStatus === 'canceled' ? 'Canceled' : 'Inactive'}
+                  </p>
+                </div>
+              </div>
+              
+              {subscriptionStatus === 'canceled' && user?.subscription?.endDate && (
+                <div className="rounded-md bg-blue-50 p-4">
+                  <div className="flex">
+                    <div className="flex-shrink-0">
+                      <svg className="h-5 w-5 text-blue-400" viewBox="0 0 20 20" fill="currentColor">
+                        <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
+                      </svg>
+                    </div>
+                    <div className="ml-3 flex-1 md:flex md:justify-between">
+                      <p className="text-sm text-blue-700">
+                        Your subscription has been canceled but you'll have access until {subscriptionEndDate}.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )}
+              
+              {user?.membershipInfo && (
+                <div className="border-t border-gray-200 pt-4 mt-6">
+                  <h4 className="font-medium text-gray-800 mb-3">Membership Details</h4>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+                    <div>
+                      <p className="text-gray-500">Join Date</p>
+                      <p className="font-medium">
+                        {user.membershipInfo.joinDate ? new Date(user.membershipInfo.joinDate).toLocaleDateString() : 'N/A'}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-gray-500">Total Purchases</p>
+                      <p className="font-medium">{user.membershipInfo.totalPurchases || 0}</p>
+                    </div>
+                    <div>
+                      <p className="text-gray-500">Renewal Count</p>
+                      <p className="font-medium">{user.membershipInfo.renewalCount || 0}</p>
+                    </div>
+                    <div>
+                      <p className="text-gray-500">Total Spend</p>
+                      <p className="font-medium">
+                        ${typeof user.membershipInfo.totalSpend === 'number' 
+                          ? user.membershipInfo.totalSpend.toFixed(2) 
+                          : '0.00'}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )}
+              
+              <div className="pt-4 border-t border-gray-200">
+                <button
+                  onClick={() => navigate('/plans')}
+                  className="px-4 py-2 bg-[#2bcd82] text-white rounded-md hover:bg-[#25b975] focus:outline-none focus:ring-2 focus:ring-[#2bcd82] focus:ring-offset-2 transition-colors"
+                >
+                  View Subscription Plans
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+        
+        {user?.subscriptionHistory && user.subscriptionHistory.length > 0 && (
+          <div className="bg-white shadow-sm rounded-lg p-6">
+            <h3 className="text-xl font-semibold text-gray-800 mb-6">Subscription History</h3>
+            <div className="overflow-x-auto">
+              <table className="min-w-full divide-y divide-gray-200">
+                <thead className="bg-gray-50">
+                  <tr>
+                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Date</th>
+                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Plan</th>
+                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Billing Cycle</th>
+                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Amount</th>
+                  </tr>
+                </thead>
+                <tbody className="bg-white divide-y divide-gray-200">
+                  {user.subscriptionHistory.slice().reverse().map((history, index) => (
+                    <tr key={index}>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                        {new Date(history.purchaseDate).toLocaleDateString()}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                        {history.plan.charAt(0).toUpperCase() + history.plan.slice(1)}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                        {history.billingCycle.charAt(0).toUpperCase() + history.billingCycle.slice(1)}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                        ${typeof history.amount === 'number' ? history.amount.toFixed(2) : history.amount}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  };
+  
   return (
-    <>
+    <div className="min-h-screen bg-gray-50">
       <Header />
       
-      <main className="container mx-auto py-12 px-4 max-w-6xl">
-        <h1 className="text-3xl font-bold text-gray-900 mb-8">Account Settings</h1>
-        
-        {renderTabs()}
-        
-        {activeTab === 'profile' && renderProfileTab()}
-        {activeTab === 'shipping' && renderShippingTab()}
-        {activeTab === 'password' && renderPasswordTab()}
+      <main className="max-w-5xl mx-auto py-10 px-4 sm:px-6 lg:px-8">
+        <div className="space-y-6">
+          <div className="bg-white shadow-sm rounded-md overflow-hidden">
+            <div className="px-4 py-5 sm:px-6">
+              <h2 className="text-lg font-medium text-gray-900">Account Settings</h2>
+              <p className="mt-1 text-sm text-gray-500">
+                Update your account information and preferences
+              </p>
+            </div>
+            
+            {renderTabs()}
+            
+            <div className="px-4 py-5 sm:p-6">
+              {activeTab === 'profile' && renderProfileTab()}
+              {activeTab === 'password' && renderPasswordTab()}
+              {activeTab === 'subscription' && renderSubscriptionTab()}
+            </div>
+          </div>
+        </div>
       </main>
       
       <Footer />
-    </>
+    </div>
   );
 };
 

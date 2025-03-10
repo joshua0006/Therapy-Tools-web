@@ -3,38 +3,40 @@ import { useNavigate } from 'react-router-dom';
 import Header from './Header';
 import Footer from './Footer';
 import Button from './Button';
-import { BookOpen, Users, GraduationCap, Award, Download, ShoppingBag, ChevronLeft, ChevronRight, Clock, MapPin, ExternalLink, Tag } from 'lucide-react';
+import { BookOpen, Users, GraduationCap, Award, Download, ShoppingBag, ChevronLeft, ChevronRight, Clock, MapPin, ExternalLink, Tag, FileText } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useWooCommerce } from '../context/WooCommerceContext';
 import { useEventsNews } from '../context/EventsNewsContext';
-import { formatCurrency, formatDate } from '../utils/formatters';
+import { formatDate } from '../utils/formatters';
 
-// This creates a fake original price that's 10-20% higher than the actual price
-const calculateOriginalPrice = (actualPrice: number): number => {
-  // Random discount between 10% and 20%
-  const discountPercentage = Math.floor(Math.random() * 11) + 10; // 10-20
-  
-  // Calculate the "original" price
-  const originalPrice = actualPrice * (100 / (100 - discountPercentage));
-  
-  // Round to 2 decimal places
-  return Math.round(originalPrice * 100) / 100;
-};
+// Add type definition for Product with categories
+interface Product {
+  id: string | number;
+  name: string;
+  description?: string;
+  price?: number | string;
+  thumbnail?: string;
+  image?: string; // Used as a fallback for thumbnail
+  category?: string;
+  categories?: Array<string | Category>;
+  downloads?: Array<{
+    id: string;
+    name: string;
+    file: string;
+    [key: string]: any;
+  }>;
+  fileUrl?: string; // PDF URL
+  pdfUrl?: string; // Alternative PDF URL
+  [key: string]: any;
+}
 
-// Helper to get product price regardless of format
-const getProductPrice = (product: any): number => {
-  if (typeof product.price === 'number') {
-    return product.price;
-  } else if (typeof product.price === 'string') {
-    return parseFloat(product.price) || 0;
-  }
-  return 0;
-};
-
-// Calculate the discount percentage for a product
-const getDiscountPercentage = (actualPrice: number, originalPrice: number): number => {
-  return Math.round(((originalPrice - actualPrice) / originalPrice) * 100);
-};
+// Category object structure
+interface Category {
+  id: string | number;
+  name: string;
+  slug?: string;
+  [key: string]: any;
+}
 
 // Skeleton Loaders
 const CarouselSkeleton = () => (
@@ -46,6 +48,61 @@ const CarouselSkeleton = () => (
     </div>
   </div>
 );
+
+// Helper function to check if text contains HTML
+const containsHtml = (text: string): boolean => {
+  if (!text) return false;
+  const regex = /<\/?[a-z][\s\S]*>/i;
+  return regex.test(text);
+};
+
+// Function to check if product has PDF files
+const hasPdfFiles = (product: Product): boolean => {
+  // Check downloads array
+  if (product.downloads && product.downloads.length > 0) {
+    const pdfDownloads = product.downloads.filter(download => 
+      download.file && download.file.toLowerCase().endsWith('.pdf')
+    );
+    if (pdfDownloads.length > 0) return true;
+  }
+  
+  // Check direct PDF URL
+  if (product.pdfUrl && product.pdfUrl.toLowerCase().endsWith('.pdf')) {
+    return true;
+  }
+  
+  // Check fileUrl
+  if (product.fileUrl && product.fileUrl.toLowerCase().endsWith('.pdf')) {
+    return true;
+  }
+  
+  return false;
+};
+
+// Function to get PDF count
+const getPdfCount = (product: Product): number => {
+  let count = 0;
+  
+  // Count PDFs in downloads array
+  if (product.downloads && product.downloads.length > 0) {
+    const pdfDownloads = product.downloads.filter(download => 
+      download.file && download.file.toLowerCase().endsWith('.pdf')
+    );
+    count += pdfDownloads.length;
+  }
+  
+  // Add direct PDF URL if available
+  if (product.pdfUrl && product.pdfUrl.toLowerCase().endsWith('.pdf')) {
+    count += 1;
+  }
+  
+  // Add fileUrl if available and not already counted
+  if (product.fileUrl && product.fileUrl.toLowerCase().endsWith('.pdf') && product.fileUrl !== product.pdfUrl) {
+    count += 1;
+  }
+  
+  return count;
+};
 
 const HomePage: React.FC = () => {
   const { isLoggedIn } = useAuth();
@@ -65,18 +122,6 @@ const HomePage: React.FC = () => {
   
   // Use events for the carousel instead of products
   const carouselEvents = events.slice(0, 4);
-
-  // Create a mapping of product IDs to their "original" prices
-  const originalPrices = useMemo(() => {
-    const priceMap: Record<string, number> = {};
-    
-    featuredProducts.forEach((product) => {
-      const productPrice = getProductPrice(product);
-      priceMap[product.id] = calculateOriginalPrice(productPrice);
-    });
-    
-    return priceMap;
-  }, [featuredProducts]);
 
   // Mark page as loaded once data is ready
   useEffect(() => {
@@ -250,13 +295,13 @@ const HomePage: React.FC = () => {
               </div>
               <div className="flex flex-col items-center">
                 <Download className="w-12 h-12 mb-4" />
-                <h3 className="text-2xl font-bold">Instant Downloads</h3>
-                <p className="text-lg">Get what you need when you need it</p>
+                <h3 className="text-2xl font-bold">Instant Access</h3>
+                <p className="text-lg">Unlock all resources with your subscription</p>
               </div>
               <div className="flex flex-col items-center">
                 <ShoppingBag className="w-12 h-12 mb-4" />
                 <h3 className="text-2xl font-bold">Membership Benefits</h3>
-                <p className="text-lg">Save with our exclusive plans</p>
+                <p className="text-lg">Unlimited access to our complete library</p>
               </div>
             </div>
           </div>
@@ -268,83 +313,133 @@ const HomePage: React.FC = () => {
       {/* Featured Products */}
       <div className="py-16 bg-white">
         <div className="container mx-auto px-4">
-          <h2 className="text-3xl font-bold text-center text-gray-800 mb-12">
+          <h2 className="text-3xl font-bold text-center text-gray-800 mb-2">
             Featured <span className="text-[#fb6a69]">Catalogs</span>
           </h2>
           
-          {productsLoading ? (
-            <div className="flex justify-center items-center py-12">
-              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#2bcd82]"></div>
-            </div>
-          ) : (
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-              {featuredProducts.map((product) => {
-                const actualPrice = getProductPrice(product);
-                return (
+          {/* Featured Products Section */}
+          <section className="bg-white rounded-lg p-8">
+       
+            
+            {productsLoading ? (
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+                {[...Array(3)].map((_, idx) => (
+                  <div key={idx} className="bg-white rounded-lg overflow-hidden h-96">
+                    <div className="h-48 bg-gray-200 animate-pulse"></div>
+                    <div className="p-5">
+                      <div className="h-6 bg-gray-200 rounded animate-pulse mb-4"></div>
+                      <div className="h-24 bg-gray-100 rounded animate-pulse mb-4"></div>
+                      <div className="h-10 w-32 bg-gray-200 rounded animate-pulse"></div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+                {featuredProducts.map((product) => (
                   <div 
                     key={product.id} 
-                    className="bg-white rounded-lg shadow-md overflow-hidden cursor-pointer transition-transform hover:scale-105"
+                    className="bg-white rounded-lg shadow-md overflow-hidden cursor-pointer transition-all hover:shadow-lg flex flex-col h-full"
                     onClick={() => navigate(`/catalog/${product.id}`)}
                   >
                     <div className="h-48 overflow-hidden relative">
                       <img 
-                        src={product.thumbnail || "https://images.unsplash.com/photo-1503676260728-1c00da094a0b?ixlib=rb-1.2.1&auto=format&fit=crop&w=800&q=80"} 
+                        src={(product as any).thumbnail || (product as any).image || "https://images.unsplash.com/photo-1503676260728-1c00da094a0b?ixlib=rb-1.2.1&auto=format&fit=crop&w=800&q=80"} 
                         alt={product.name} 
                         className="w-full h-full object-cover transition-transform hover:scale-105"
                       />
                       
-                      {/* Sale Tag */}
-                      {actualPrice > 0 ? (
-                        <div className="absolute top-0 right-0 bg-[#fb6a69] text-white px-3 py-1 rounded-bl-lg text-sm font-bold flex items-center">
-                          <Tag className="w-4 h-4 mr-1" />
-                          {getDiscountPercentage(actualPrice, originalPrices[product.id])}% OFF
-                        </div>
-                      ) : (
-                        <div className="absolute top-0 right-0 bg-[#2bcd82] text-white px-3 py-1 rounded-bl-lg text-sm font-bold flex items-center">
-                          <Tag className="w-4 h-4 mr-1" />
-                          FREE
-                        </div>
-                      )}
+                      {/* Subscription Badge */}
+                      <div className="absolute top-0 right-0 bg-[#2bcd82] text-white px-3 py-1 rounded-bl-lg text-sm font-bold flex items-center">
+                        <Tag className="w-4 h-4 mr-1" />
+                        INCLUDED
+                      </div>
                     </div>
-                    <div className="p-4">
-                      <h3 className="text-lg font-bold text-gray-800 mb-2">{product.name}</h3>
-                      <div className="flex justify-between items-center">
-                        <div className="flex flex-col">
-                          {actualPrice > 0 ? (
-                            <>
-                              {/* Original Price (crossed out) */}
-                              <span className="text-gray-500 line-through text-sm">
-                                {formatCurrency(originalPrices[product.id])}
-                              </span>
-                              
-                              {/* Sale Price */}
-                              <span className="text-[#fb6a69] font-bold text-lg">
-                                {formatCurrency(actualPrice)}
-                              </span>
-                            </>
-                          ) : (
-                            /* Free Product Price */
-                            <span className="text-[#2bcd82] font-bold text-lg">
-                              Free
-                            </span>
-                          )}
-                        </div>
-                        <button 
-                          className="bg-[#2bcd82] hover:bg-[#25b975] text-white font-medium py-1 px-4 rounded-full"
-                          onClick={(e) => {
-                            e.stopPropagation(); // Prevent triggering the parent card's onClick
-                            navigate(`/catalog/${product.id}`);
-                          }}
+                    
+                    <div className="p-5 flex flex-col flex-grow">
+                      <div className="h-14 mb-2 flex flex-col justify-center">
+                        <h3 
+                          className="text-lg font-bold text-gray-800 hover:text-[#2bcd82] transition-colors line-clamp-2 leading-tight"
+                          title={product.name}
                         >
-                          View Details
-                        </button>
+                          {product.name}
+                        </h3>
+                      </div>
+                      
+                      {/* Category Tags */}
+                      <div className="flex flex-wrap gap-1 mb-3">
+                        {((product as any).categories && Array.isArray((product as any).categories) && (product as any).categories.length > 0) ? (
+                          (product as any).categories.map((cat: any, idx: number) => (
+                            <span 
+                              key={idx} 
+                              className="text-xs px-2 py-1 bg-blue-50 text-blue-700 rounded-full shadow-sm"
+                            >
+                              {typeof cat === 'object' && cat !== null && 'name' in cat ? cat.name : cat}
+                            </span>
+                          ))
+                        ) : product.category ? (
+                          <span className="text-xs px-2 py-1 bg-blue-50 text-blue-700 rounded-full shadow-sm">
+                            {product.category}
+                          </span>
+                        ) : null}
+                      </div>
+                      
+                      <div className="text-gray-600 mb-4 text-sm flex-grow">
+                        {product.description ? (
+                          <>
+                            {containsHtml(product.description) ? (
+                              <div 
+                                className="line-clamp-3 prose prose-sm max-w-none prose-p:my-1 prose-headings:my-1" 
+                                dangerouslySetInnerHTML={{ 
+                                  __html: product.description.length > 150 
+                                    ? product.description.substring(0, 150) + '...' 
+                                    : product.description 
+                                }} 
+                              />
+                            ) : (
+                              <p className="line-clamp-3">
+                                {product.description.length > 120 
+                                  ? product.description.substring(0, 120) + '...' 
+                                  : product.description}
+                              </p>
+                            )}
+                            {product.description.length > (containsHtml(product.description) ? 150 : 120) && (
+                              <span className="text-blue-500 text-xs font-medium mt-1 inline-block">
+                                Read more
+                              </span>
+                            )}
+                          </>
+                        ) : (
+                          <p className="text-gray-400 italic">No description available</p>
+                        )}
+                      </div>
+                      
+                      <div className="mt-auto flex items-center justify-between">
+                        <div className="flex space-x-2">
+                          <button 
+                            className="text-white bg-[#2bcd82] flex items-center gap-2 hover:bg-[#25b975] p-2 rounded-lg transition-colors"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              navigate(`/catalog/${product.id}`);
+                            }}
+                          >
+                            {getPdfCount(product) > 1 ? (
+                              <>
+                                <FileText className="w-4 h-4" />
+                                View {getPdfCount(product)} PDFs
+                              </>
+                            ) : (
+                              <>View Details</>
+                            )}
+                          </button>
+                        </div>
                       </div>
                     </div>
                   </div>
-                );
-              })}
-            </div>
-          )}
+                ))}
+              </div>
+            )}
+          </section>
           
           <div className="text-center mt-10">
             <Button 
@@ -468,8 +563,9 @@ const HomePage: React.FC = () => {
           </div>
         </div>
       </section>
- {/* Member Benefits */}
- <div className="py-16 bg-gray-100">
+
+      {/* Member Benefits */}
+      <div className="py-16 bg-gray-100">
         <div className="container mx-auto px-4">
           <h2 className="text-3xl font-bold text-center text-gray-800 mb-4">
             Why Join Our <span className="text-[#fb6a69]">Membership</span>?
@@ -505,6 +601,7 @@ const HomePage: React.FC = () => {
           </div>
         </div>
       </div>
+
       {/* Testimonials */}
       <div className="bg-gradient-to-br from-[#fb6a69]/5 to-[#2bcd82]/5 py-20">
         <div className="container mx-auto px-4">
@@ -576,8 +673,6 @@ const HomePage: React.FC = () => {
           </div>
         </div>
       </div>
-
-     
 
       <Footer />
     </div>

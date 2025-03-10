@@ -105,6 +105,8 @@ export interface BillingAddress {
   updatedAt?: Date;
 }
 
+// NOTE: Shipping addresses are no longer used in the UI as the website only offers PDF files.
+// This interface is kept for backward compatibility with existing user data.
 export interface ShippingAddress {
   firstName: string;
   lastName: string;

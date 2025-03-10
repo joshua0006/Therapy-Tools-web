@@ -93,21 +93,7 @@ const Cart: React.FC<CartProps> = ({ className }) => {
 
   return (
     <>
-      {/* Floating Cart Button */}
-      {isLoaded && !isCartOpen && (
-        <button 
-          onClick={() => setIsCartOpen(true)}
-          className="fixed bottom-6 right-6 bg-[#fb6a69] text-white rounded-full p-4 shadow-lg z-40 transition-all duration-300 hover:scale-110 w-14 h-14 flex items-center justify-center"
-          aria-label="Open cart"
-        >
-          <ShoppingCart className="w-6 h-6" />
-          {getTotalItems() > 0 && (
-            <span className="absolute -top-1 -right-1 bg-[#2bcd82] text-white text-xs rounded-full h-5 w-5 flex items-center justify-center border-2 border-white">
-              {getTotalItems()}
-            </span>
-          )}
-        </button>
-      )}
+      {/* Floating Cart Button - Removed */}
       
       {/* Overlay */}
       {(isCartOpen || isAnimating) && (

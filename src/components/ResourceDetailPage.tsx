@@ -1,13 +1,12 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, ShoppingCart, Check, Star, Loader, Clock, BookOpen, Users, AlertCircle, FileText, LockIcon, Info, CheckCircle, Tag } from 'lucide-react';
+import { ArrowLeft, ShoppingCart, Check, Star, Loader, Clock, BookOpen, Users, AlertCircle, FileText, LockIcon, Info, CheckCircle, Tag, X, Bookmark, BookmarkPlus } from 'lucide-react';
 import Header from './Header';
 import Footer from './Footer';
 import Button from './Button';
-import { useCart } from '../context/CartContext';
 import { useAuth } from '../context/AuthContext';
 import { toast } from 'react-hot-toast';
-import { getFirestore, doc, getDoc, collection, query, where, getDocs } from 'firebase/firestore';
+import { getFirestore, doc, getDoc, collection, query, where, getDocs, setDoc, arrayUnion } from 'firebase/firestore';
 import { app } from '../lib/firebase';
 import SecurePdfViewer from './SecurePdfViewer';
 
@@ -20,7 +19,8 @@ interface FirebaseProduct {
   content?: string;
   price?: number | string;
   thumbnail?: string;
-  category?: string;
+  category?: string; // For backward compatibility
+  categories?: Array<string | Category>; // Array of category names or Category objects
   downloads?: Array<{
     id: string;
     name: string;
@@ -37,6 +37,14 @@ interface FirebaseProduct {
     targetAudience?: string;
     [key: string]: any;
   };
+  [key: string]: any;
+}
+
+// Category object structure
+interface Category {
+  id: string | number;
+  name: string;
+  slug?: string;
   [key: string]: any;
 }
 
@@ -117,18 +125,23 @@ const ResourceDetailPage: React.FC = () => {
   const [product, setProduct] = useState<FirebaseProduct | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<'description' | 'details' | 'reviews'>('description');
   const [usingMockData, setUsingMockData] = useState(false);
   const [relatedProducts, setRelatedProducts] = useState<FirebaseProduct[]>([]);
   const [hasPurchased, setHasPurchased] = useState(false);
   const [checkingPurchase, setCheckingPurchase] = useState(true);
   
-  // Add PDF viewer states
+  // PDF viewer states
   const [isPdfViewerVisible, setIsPdfViewerVisible] = useState(false);
   const [pdfDetails, setPdfDetails] = useState<{ url: string; name: string } | null>(null);
   
-  const { addToCart } = useCart();
-  const { user, isLoggedIn, getUserPurchaseHistory } = useAuth();
+  // PDF list states
+  const [availablePdfs, setAvailablePdfs] = useState<Array<{ url: string; name: string; id?: string }>>([]);
+  const [showPdfList, setShowPdfList] = useState(false);
+  
+  const { user, isLoggedIn, getUserPurchaseHistory, isSubscriptionActive, getSubscriptionRemainingDays } = useAuth();
+  
+  // Add a new state for bookmark status
+  const [isBookmarked, setIsBookmarked] = useState(false);
   
   // Create Firestore instance directly
   const db = getFirestore(app);
@@ -172,7 +185,7 @@ const ResourceDetailPage: React.FC = () => {
     return 0;
   };
   
-  // Check if user has purchased this product
+  // Check if user has access to this product via subscription or direct purchase
   useEffect(() => {
     const checkPurchaseStatus = async () => {
       if (!resourceId || !isLoggedIn || !user) {
@@ -184,7 +197,18 @@ const ResourceDetailPage: React.FC = () => {
       try {
         setCheckingPurchase(true);
         
-        // Get user purchase history
+        // First check if user has an active subscription
+        const hasActiveSubscription = isSubscriptionActive();
+        
+        if (hasActiveSubscription) {
+          // If user has an active subscription, they can access all PDFs
+          setHasPurchased(true);
+          console.log('User has access to this product via active subscription');
+          setCheckingPurchase(false);
+          return;
+        }
+        
+        // If no active subscription, check if they purchased this specific product
         const purchaseHistory = await getUserPurchaseHistory();
         
         // Check if the current product is in any of the purchase items
@@ -337,77 +361,233 @@ const ResourceDetailPage: React.FC = () => {
     loadProduct();
   }, [resourceId, db]);
   
-  const handleAddToCart = () => {
+  // Use the same hasPdfFiles function, but also add a function to collect all available PDFs
+  const collectAvailablePdfs = (product: FirebaseProduct): Array<{ url: string; name: string; id?: string }> => {
+    const pdfs: Array<{ url: string; name: string; id?: string }> = [];
+    
+    // Collect PDFs from downloads array
+    if (product.downloads && product.downloads.length > 0) {
+      const pdfDownloads = product.downloads.filter(download => 
+        download.file && download.file.toLowerCase().endsWith('.pdf')
+      );
+      
+      pdfDownloads.forEach(download => {
+        pdfs.push({
+          url: download.file,
+          name: download.name || `${product.name || 'Document'} - ${pdfs.length + 1}`,
+          id: download.id
+        });
+      });
+    }
+    
+    // Add direct PDF URL if available
+    if (product.pdfUrl && product.pdfUrl.toLowerCase().endsWith('.pdf')) {
+      // Check if it's not already in the list
+      if (!pdfs.some(pdf => pdf.url === product.pdfUrl)) {
+        pdfs.push({
+          url: product.pdfUrl,
+          name: `${product.name || product.title || 'Document'} - Main PDF`,
+        });
+      }
+    }
+    
+    // Add fileUrl if available and not already counted
+    if (product.fileUrl && product.fileUrl.toLowerCase().endsWith('.pdf') && 
+        (!product.pdfUrl || product.fileUrl !== product.pdfUrl)) {
+      // Check if it's not already in the list
+      if (!pdfs.some(pdf => pdf.url === product.fileUrl)) {
+        pdfs.push({
+          url: product.fileUrl,
+          name: `${product.name || product.title || 'Document'} - Additional PDF`,
+        });
+      }
+    }
+    
+    return pdfs;
+  };
+
+  // Add useEffect to collect PDFs when product changes
+  useEffect(() => {
     if (product) {
-      addToCart({
-        id: parseInt(product.id, 10) || Math.floor(Math.random() * 10000),
-        title: product.name || product.title || 'Unnamed Product',
+      const pdfs = collectAvailablePdfs(product);
+      setAvailablePdfs(pdfs);
+    }
+  }, [product]);
+  
+  // Add useEffect to check if this product is already bookmarked
+  useEffect(() => {
+    const checkBookmarkStatus = async () => {
+      if (!isLoggedIn || !user || !resourceId) return;
+      
+      try {
+        const db = getFirestore();
+        const bookmarksRef = doc(db, 'users', user.id, 'bookmarks', 'savedItems');
+        const bookmarksSnap = await getDoc(bookmarksRef);
+        
+        if (bookmarksSnap.exists()) {
+          const bookmarksData = bookmarksSnap.data();
+          if (bookmarksData.items && Array.isArray(bookmarksData.items)) {
+            const isAlreadyBookmarked = bookmarksData.items.some(
+              (item: any) => item.id === resourceId
+            );
+            setIsBookmarked(isAlreadyBookmarked);
+          }
+        }
+      } catch (err) {
+        console.error('Error checking bookmark status:', err);
+      }
+    };
+    
+    checkBookmarkStatus();
+  }, [isLoggedIn, user, resourceId]);
+  
+  // Replace handleAddToCart with handleAddToBookmarks
+  const handleAddToBookmarks = async () => {
+    if (!isLoggedIn || !user) {
+      toast.error('Please log in to bookmark this item');
+      navigate('/signin');
+      return;
+    }
+    
+    if (!product) return;
+    
+    try {
+      const db = getFirestore();
+      const bookmarksRef = doc(db, 'users', user.id, 'bookmarks', 'savedItems');
+      
+      // Extract category names for storage
+      const extractCategoryNames = (categories: Array<string | Category> | undefined) => {
+        if (!categories || !Array.isArray(categories)) return [];
+        
+        return categories.map(cat => {
+          if (typeof cat === 'object' && cat !== null && 'name' in cat) {
+            return cat.name;
+          }
+          return cat;
+        });
+      };
+      
+      const bookmarkItem = {
+        id: product.id,
+        name: product.name || product.title || 'Unnamed Product',
         description: product.description || '',
         category: product.category || 'Uncategorized',
+        // Add categories array, extract from product.categories if it exists, otherwise create from category
+        categories: product.categories ? extractCategoryNames(product.categories) : 
+                    (product.category ? [product.category] : ['Uncategorized']),
         imageUrl: product.thumbnail || product.image || product.images?.[0]?.src || '',
-        price: getProductPrice(product).toString(),
-        quantity: 1
-      });
+        addedAt: new Date().toISOString(),
+        hasPdf: hasPdfFiles(product)
+      };
       
-      toast.success(`${product.name || product.title || 'Product'} added to cart!`);
+      // First, check if bookmarks document exists
+      const bookmarksSnap = await getDoc(bookmarksRef);
+      
+      if (!bookmarksSnap.exists()) {
+        // Create the bookmarks document with this item
+        await setDoc(bookmarksRef, {
+          items: [bookmarkItem],
+          updatedAt: new Date().toISOString()
+        });
+      } else {
+        // Update the existing bookmarks document
+        const existingData = bookmarksSnap.data();
+        
+        // Check if already bookmarked to avoid duplicates
+        if (existingData.items && Array.isArray(existingData.items)) {
+          const isAlreadyBookmarked = existingData.items.some(
+            (item: any) => item.id === product.id
+          );
+          
+          if (isAlreadyBookmarked) {
+            // Already bookmarked, so we'll remove it (toggle behavior)
+            const updatedItems = existingData.items.filter((item: any) => item.id !== product.id);
+            
+            await setDoc(bookmarksRef, {
+              items: updatedItems,
+              updatedAt: new Date().toISOString()
+            });
+            
+            setIsBookmarked(false);
+            toast.success(`${product.name || product.title || 'Product'} removed from bookmarks`);
+            return;
+          }
+        }
+        
+        // Add to bookmarks
+        await setDoc(bookmarksRef, {
+          items: arrayUnion(bookmarkItem),
+          updatedAt: new Date().toISOString()
+        }, { merge: true });
+      }
+      
+      setIsBookmarked(true);
+      toast.success(`${product.name || product.title || 'Product'} added to bookmarks!`);
+    } catch (err) {
+      console.error('Error adding to bookmarks:', err);
+      toast.error('Failed to add to bookmarks. Please try again.');
     }
   };
   
-  // Update the handleViewPdf function to use the secure viewer
+  // Modify the handleViewPdf function to show PDF list if multiple PDFs available
   const handleViewPdf = () => {
     if (!isLoggedIn) {
       toast.error('Please log in to view this PDF');
-      navigate('/login');
+      navigate('/signin');
       return;
     }
     
     if (!hasPurchased) {
-      toast.error('You need to purchase this product to view the PDF');
-      return;
+      // Check if user has an active subscription
+      const hasActiveSubscription = isSubscriptionActive();
+      
+      if (hasActiveSubscription) {
+        // Allow access if they have an active subscription
+        setHasPurchased(true);
+      } else {
+        // Otherwise inform them they need a subscription
+        toast.error('You need an active subscription to access PDF resources');
+        return;
+      }
     }
     
     if (product && resourceId) {
-      // Check if we have direct PDF details
-      if (product.pdfUrl) {
-        setPdfDetails({
-          url: product.pdfUrl,
-          name: product.name || product.title || 'PDF Document'
-        });
-        setIsPdfViewerVisible(true);
+      // Collect all available PDFs
+      const pdfs = collectAvailablePdfs(product);
+      
+      if (pdfs.length === 0) {
+        toast.error('No PDF files found for this product');
         return;
       }
       
-      // Check for PDF in downloads array
-      if (product.downloads && product.downloads.length > 0) {
-        const pdfDownloads = product.downloads.filter(download => 
-          download.file && download.file.toLowerCase().endsWith('.pdf')
-        );
-        
-        if (pdfDownloads.length > 0) {
-          setPdfDetails({
-            url: pdfDownloads[0].file,
-            name: pdfDownloads[0].name || product.name || 'PDF Document'
-          });
-          setIsPdfViewerVisible(true);
-          return;
-        }
-      }
+      setAvailablePdfs(pdfs);
       
-      // Check fileUrl as a last resort
-      if (product.fileUrl && product.fileUrl.toLowerCase().endsWith('.pdf')) {
-        setPdfDetails({
-          url: product.fileUrl,
-          name: product.name || product.title || 'PDF Document'
-        });
+      if (pdfs.length === 1) {
+        // If there's only one PDF, open it directly
+        setPdfDetails(pdfs[0]);
         setIsPdfViewerVisible(true);
-        return;
+      } else {
+        // If there are multiple PDFs, show the selection list
+        setShowPdfList(true);
       }
-      
-      // If no PDF found
-      toast.error('No PDF file found for this product');
     }
   };
   
+  // Add function to select a specific PDF to view
+  const handleSelectPdf = (pdf: { url: string; name: string }) => {
+    setPdfDetails({
+      url: pdf.url,
+      name: pdf.name
+    });
+    setIsPdfViewerVisible(true);
+    setShowPdfList(false);
+  };
+
+  // Add function to close PDF list
+  const handleClosePdfList = () => {
+    setShowPdfList(false);
+  };
+
   // Add function to close PDF viewer
   const handleClosePdfViewer = () => {
     setIsPdfViewerVisible(false);
@@ -420,6 +600,31 @@ const ResourceDetailPage: React.FC = () => {
   const originalPrice = useMemo(() => {
     return calculateOriginalPrice(productPrice);
   }, [productPrice]);
+  
+  // Add this component to render subscription status
+  const renderSubscriptionStatus = () => {
+    if (!isLoggedIn || !user) return null;
+    
+    const hasActiveSubscription = isSubscriptionActive();
+    if (!hasActiveSubscription) return null;
+    
+    const remainingDays = getSubscriptionRemainingDays();
+    
+    return (
+      <div className="mb-4 bg-green-50 p-3 rounded-lg border border-green-100">
+        <div className="flex items-center text-green-700">
+          <CheckCircle className="w-5 h-5 mr-2 text-green-600" />
+          <span className="font-medium">Active Subscription</span>
+        </div>
+        <p className="text-sm text-green-600 mt-1">
+          Your subscription provides full access to all PDF resources. 
+          {remainingDays > 0 && (
+            <span className="font-medium"> {remainingDays} days remaining</span>
+          )}
+        </p>
+      </div>
+    );
+  };
   
   if (loading) {
     return (
@@ -538,9 +743,23 @@ const ResourceDetailPage: React.FC = () => {
                 {product.name || product.title || 'Unnamed Product'}
               </h1>
               
-              <div className="mt-1 mb-4">
-                <span className="text-sm text-gray-500">Category: </span>
-                <span className="text-sm font-medium text-gray-700">{product.category || 'Uncategorized'}</span>
+              {/* Subscription status indicator */}
+              {renderSubscriptionStatus()}
+              
+              {/* Product Category */}
+              <div className="flex items-center my-2">
+                <Tag className="h-5 w-5 text-green-700 mr-2" />
+                {product.categories && Array.isArray(product.categories) && product.categories.length > 0 ? (
+                  <div className="flex flex-wrap gap-1">
+                    {product.categories.map((cat, idx) => (
+                      <span key={idx} className="text-sm px-2 py-1 bg-green-50 text-green-700 rounded-full">
+                        {typeof cat === 'object' && cat !== null ? cat.name : cat}
+                      </span>
+                    ))}
+                  </div>
+                ) : (
+                  <span className="text-sm font-medium text-gray-700">{product.category || 'Uncategorized'}</span>
+                )}
               </div>
               
               {/* PDF Indicator */}
@@ -548,61 +767,35 @@ const ResourceDetailPage: React.FC = () => {
                 <div className="mb-4 flex items-center bg-blue-50 p-2 rounded">
                   <FileText className="text-blue-500 mr-2 w-5 h-5" />
                   <span className="text-blue-700 text-sm font-medium">
-                    PDF document included
+                    {availablePdfs.length > 1 ? `${availablePdfs.length} PDF documents included` : "PDF document included"}
                     {!hasPurchased && !checkingPurchase && (
                       <span className="ml-1 text-yellow-600">
                         <LockIcon className="w-3 h-3 inline-block mr-1" />
-                        Purchase required to view
+                        Subscription required
                       </span>
                     )}
                   </span>
                 </div>
               )}
               
-              {/* Sale Tag */}
-              {productPrice > 0 ? (
-                <div className="mb-4 flex items-center bg-[#ffebeb] p-2 rounded">
-                  <Tag className="text-[#fb6a69] mr-2 w-5 h-5" />
-                  <span className="text-[#fb6a69] text-sm font-bold">
-                    {getDiscountPercentage(productPrice, originalPrice)}% OFF
-                  </span>
-                </div>
-              ) : (
-                <div className="mb-4 flex items-center bg-[#ebfdf3] p-2 rounded">
-                  <Tag className="text-[#2bcd82] mr-2 w-5 h-5" />
-                  <span className="text-[#2bcd82] text-sm font-bold">
-                    FREE
-                  </span>
-                </div>
-              )}
-              
-              <div className="mb-4">
-                {productPrice > 0 ? (
-                  <>
-                    {/* Original Price (crossed out) */}
-                    <span className="text-gray-500 line-through text-lg block">
-                      {formatCurrency(originalPrice)}
-                    </span>
-                    
-                    {/* Sale Price */}
-                    <span className="text-2xl text-[#fb6a69] font-bold">
-                      {formatCurrency(productPrice)}
-                    </span>
-                  </>
-                ) : (
-                  /* Free Product Price */
-                  <span className="text-2xl text-[#2bcd82] font-bold">
-                    Free
-                  </span>
-                )}
-              </div>
-              
               <div className="flex flex-col space-y-4 mt-auto">
                 <Button 
-                  onClick={handleAddToCart}
-                  className="flex items-center justify-center bg-[#2bcd82] hover:bg-[#25b975] text-white py-3 rounded-lg"
+                  onClick={handleAddToBookmarks}
+                  className={`flex items-center justify-center py-3 rounded-lg transition-colors ${
+                    isBookmarked 
+                      ? 'bg-blue-100 text-blue-700 hover:bg-blue-200 border border-blue-300' 
+                      : 'bg-[#2bcd82] hover:bg-[#25b975] text-white'
+                  }`}
                 >
-                  <ShoppingCart className="w-5 h-5 mr-2" /> Add to Cart
+                  {isBookmarked ? (
+                    <>
+                      <Bookmark className="w-5 h-5 mr-2" /> Bookmarked
+                    </>
+                  ) : (
+                    <>
+                      <BookmarkPlus className="w-5 h-5 mr-2" /> Add to Bookmarks
+                    </>
+                  )}
                 </Button>
                 
                 {hasPdfFiles(product) && (
@@ -622,8 +815,8 @@ const ResourceDetailPage: React.FC = () => {
                         </div>
                         <p className="text-sm text-gray-500 text-center">
                           {isLoggedIn ? 
-                            "Purchase this product to unlock PDF access" : 
-                            "Login and purchase to access PDF content"}
+                            "Active subscription required to access PDF content" : 
+                            "Login and subscribe to access PDF content"}
                         </p>
                       </div>
                     )}
@@ -633,265 +826,86 @@ const ResourceDetailPage: React.FC = () => {
             </div>
           </div>
           
-          {/* Tabs */}
+          {/* Remove the tabs section and directly show description content */}
           <div className="border-t border-gray-100">
-            <div className="flex border-b border-gray-100">
-              <button
-                className={`flex-1 py-3 px-4 text-center text-sm font-medium ${activeTab === 'description' ? 'text-[#2bcd82] border-b-2 border-[#2bcd82]' : 'text-gray-500'}`}
-                onClick={() => setActiveTab('description')}
-              >
-                Description
-              </button>
-              <button
-                className={`flex-1 py-3 px-4 text-center text-sm font-medium ${activeTab === 'details' ? 'text-[#2bcd82] border-b-2 border-[#2bcd82]' : 'text-gray-500'}`}
-                onClick={() => setActiveTab('details')}
-              >
-                Details
-              </button>
-              <button
-                className={`flex-1 py-3 px-4 text-center text-sm font-medium ${activeTab === 'reviews' ? 'text-[#2bcd82] border-b-2 border-[#2bcd82]' : 'text-gray-500'}`}
-                onClick={() => setActiveTab('reviews')}
-              >
-                Reviews
-              </button>
-            </div>
-            
-            {/* Tab Content */}
             <div className="p-6">
-              {activeTab === 'description' && (
-                <div className="description-container">
-                  {product.content || product.description ? (
-                    <div className="prose prose-slate max-w-none">
-                      <div className="bg-gray-50 p-6 rounded-xl border border-gray-100 mb-6">
-                        {product.content ? (
-                          <div className="prose-img:rounded-lg prose-img:mx-auto prose-headings:text-gray-800 prose-p:text-gray-600 prose-a:text-blue-500 prose-strong:text-gray-800" dangerouslySetInnerHTML={{ __html: product.content }} />
-                        ) : product.description ? (
-                          <div>
-                            {containsHtml(product.description) ? (
-                              <div className="prose-img:rounded-lg prose-img:mx-auto prose-headings:text-gray-800 prose-p:text-gray-600 prose-a:text-blue-500 prose-strong:text-gray-800" dangerouslySetInnerHTML={{ __html: product.description }} />
-                            ) : (
-                              <>
-                                {product.description.split('\n').map((paragraph, index) => (
-                                  <p key={index} className="mb-4 text-gray-600">{paragraph}</p>
-                                ))}
-                              </>
-                            )}
-                          </div>
-                        ) : null}
-                      </div>
-                      
-                      {/* Additional info and formatting enhancements */}
-                      {product.details && Object.keys(product.details).length > 0 && (
-                        <div className="bg-indigo-50 p-4 rounded-lg mb-6">
-                          <h3 className="text-lg font-bold text-indigo-700 mb-3">Additional Information</h3>
-                          <ul className="space-y-2">
-                            {Object.entries(product.details).map(([key, value]) => {
-                              // Skip if the value is null, undefined, or an object
-                              if (value === null || value === undefined || typeof value === 'object') return null;
-                              
-                              // Format the key for display
-                              const formattedKey = key
-                                .replace(/([A-Z])/g, ' $1') // Add space before capital letters
-                                .replace(/^./, str => str.toUpperCase()); // Capitalize first letter
-                              
-                              return (
-                                <li key={key} className="flex items-start">
-                                  <div className="bg-indigo-100 p-1 rounded-full mr-2 mt-1">
-                                    <Info className="w-3 h-3 text-indigo-600" />
-                                  </div>
-                                  <div>
-                                    <span className="font-medium text-indigo-800">{formattedKey}: </span>
-                                    <span className="text-indigo-700">{String(value)}</span>
-                                  </div>
-                                </li>
-                              );
-                            })}
-                          </ul>
+              {/* Description Content - Moving content to the top */}
+              <div className="description-container">
+                {/* Always show the Contents section at the top, before any product content */}
+                <div className="prose prose-lg max-w-none">
+                  {/* Contents Section */}
+                  <div className="border-gray-200 border rounded-xl p-6 mb-8 bg-gray-50">
+                    <h2 className="text-2xl font-bold text-gray-800 mb-4">CONTENTS:</h2>
+                    <ul className="space-y-3">
+                      <li className="flex items-start">
+                        <div className="flex-shrink-0 w-6 h-6 flex items-center justify-center mr-2">
+                          <svg className="w-5 h-5 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7"></path>
+                          </svg>
                         </div>
-                      )}
-                      
-                      {/* Category information */}
-                      {product.category && (
-                        <div className="flex items-center mb-6 bg-blue-50 p-3 rounded-lg">
-                          <Tag className="text-blue-500 w-5 h-5 mr-2" />
-                          <p className="text-blue-700">
-                            <span className="font-medium">Category:</span> {product.category}
-                          </p>
+                        <span>Covers all sounds including: /p, b, t, d, k, g, m, n, ŋ, f, h, w, j, s, z, ʃ, l, ɹ, vocalic ɹ, tʃ, dʒ, v, θ, ð, /s/ clusters, /l/ clusters, /ɹ/ clusters</span>
+                      </li>
+                      <li className="flex items-start">
+                        <div className="flex-shrink-0 w-6 h-6 flex items-center justify-center mr-2">
+                          <svg className="w-5 h-5 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7"></path>
+                          </svg>
                         </div>
-                      )}
-
-                      {/* Key Benefits Section */}
-                      <div className="mb-8">
-                        <h3 className="text-xl font-bold text-gray-800 mb-4 flex items-center">
-                          <CheckCircle className="text-[#2bcd82] w-5 h-5 mr-2" />
-                          Key Benefits
-                        </h3>
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                          <div className="bg-white p-4 rounded-lg border border-gray-100 flex items-start">
-                            <div className="bg-[#2bcd82]/10 p-2 rounded-full mr-3">
-                              <Check className="w-4 h-4 text-[#2bcd82]" />
-                            </div>
-                            <div>
-                              <p className="text-gray-700">Easy-to-use resources for immediate implementation</p>
-                            </div>
-                          </div>
-                          <div className="bg-white p-4 rounded-lg border border-gray-100 flex items-start">
-                            <div className="bg-[#2bcd82]/10 p-2 rounded-full mr-3">
-                              <Check className="w-4 h-4 text-[#2bcd82]" />
-                            </div>
-                            <div>
-                              <p className="text-gray-700">Evidence-based materials created by specialists</p>
-                            </div>
-                          </div>
-                          <div className="bg-white p-4 rounded-lg border border-gray-100 flex items-start">
-                            <div className="bg-[#2bcd82]/10 p-2 rounded-full mr-3">
-                              <Check className="w-4 h-4 text-[#2bcd82]" />
-                            </div>
-                            <div>
-                              <p className="text-gray-700">Engaging activities that maintain client interest</p>
-                            </div>
-                          </div>
-                          <div className="bg-white p-4 rounded-lg border border-gray-100 flex items-start">
-                            <div className="bg-[#2bcd82]/10 p-2 rounded-full mr-3">
-                              <Check className="w-4 h-4 text-[#2bcd82]" />
-                            </div>
-                            <div>
-                              <p className="text-gray-700">Save time with ready-to-use materials</p>
-                            </div>
-                          </div>
+                        <span>120 individual "squares" featuring x12 mini pictures per square.</span>
+                      </li>
+                      <li className="flex items-start">
+                        <div className="flex-shrink-0 w-6 h-6 flex items-center justify-center mr-2">
+                          <svg className="w-5 h-5 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7"></path>
+                          </svg>
                         </div>
-                      </div>
-                      
-                      {/* Who this is for section */}
-                      <div className="bg-blue-50 p-5 rounded-xl border border-blue-100 mb-6">
-                        <h3 className="text-lg font-bold text-blue-800 mb-3 flex items-center">
-                          <Users className="w-5 h-5 mr-2 text-blue-500" />
-                          Who This Resource is For
-                        </h3>
-                        <p className="text-blue-700 mb-3">
-                          This resource is ideal for speech-language pathologists, special education teachers, and interventionists working with:
-                        </p>
-                        <ul className="list-disc pl-6 text-blue-700 space-y-1">
-                          <li>School-aged children with speech and language needs</li>
-                          <li>Clients requiring structured therapy materials</li>
-                          <li>Students needing engaging practice activities</li>
-                        </ul>
-                      </div>
-                      
-                      {!hasPurchased && hasPdfFiles(product) && (
-                        <div className="bg-yellow-50 p-5 rounded-xl border border-yellow-100">
-                          <div className="flex items-center mb-2">
-                            <Info className="text-yellow-600 w-5 h-5 mr-2" />
-                            <h3 className="text-lg font-bold text-yellow-800">PDF Access</h3>
-                          </div>
-                          <p className="text-yellow-700 mb-2">
-                            This product includes PDF materials that are accessible after purchase.
-                          </p>
-                          <p className="text-yellow-600 text-sm">
-                            Purchase now to unlock all content and resources included with this product.
-                          </p>
+                        <span>Covers initial, medial, final position (for singleton sounds)</span>
+                      </li>
+                      <li className="flex items-start">
+                        <div className="flex-shrink-0 w-6 h-6 flex items-center justify-center mr-2">
+                          <svg className="w-5 h-5 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7"></path>
+                          </svg>
                         </div>
-                      )}
+                        <span>Print-friendly as all sounds fit on one page</span>
+                      </li>
+                      <li className="flex items-start">
+                        <div className="flex-shrink-0 w-6 h-6 flex items-center justify-center mr-2">
+                          <svg className="w-5 h-5 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7"></path>
+                          </svg>
+                        </div>
+                        <span>Includes color and black & white versions</span>
+                      </li>
+                    </ul>
+                  </div>
+                  
+                  {/* Testimonials Section */}
+                  <div className="border-gray-200 border rounded-xl p-6 mb-8 bg-gray-50">
+                    <h2 className="text-2xl font-bold text-gray-800 mb-4">What SLP's like you are saying:</h2>
+                    <div className="space-y-4">
+                      <blockquote className="italic text-gray-700">
+                        "My clients have really loved putting different toys on these squares and then 'earning' them. They are a nice easy way to get some really quick productions of our targets."
+                      </blockquote>
+                      <blockquote className="italic text-gray-700">
+                        "So versatile!! I can use this for multiple sessions, coloring, or using dotter and then the next time we might put burgers on the targets and play pop the pig. The options are endless."
+                      </blockquote>
+                      <blockquote className="italic text-gray-700">
+                        "This is a perfect resource to use with any type of manipulative for the practice on the grid. You can get so creative with this one! My students love it."
+                      </blockquote>
                     </div>
-                  ) : (
-                    <div className="bg-gray-50 p-6 rounded-xl">
-                      <p className="text-gray-600">{product.description || 'No description available.'}</p>
-                    </div>
+                  </div>
+                  
+                  {/* Now show the dynamic content from Firebase */}
+                  {product?.content && (
+                    <div className="prose-img:rounded-lg prose-img:mx-auto prose-headings:text-gray-800 prose-p:text-gray-600 prose-a:text-blue-500 prose-strong:text-gray-800 mb-8"
+                      dangerouslySetInnerHTML={{ __html: product.content }} 
+                    />
                   )}
                 </div>
-              )}
+              </div>
               
-              {activeTab === 'details' && (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {product.details?.difficulty && (
-                    <div className="flex items-start">
-                      <div className="bg-gray-100 p-2 rounded-full mr-3">
-                        <Star className="w-5 h-5 text-gray-500" />
-                      </div>
-                      <div>
-                        <h3 className="text-sm font-medium text-gray-800">Difficulty</h3>
-                        <p className="text-sm text-gray-600">{product.details.difficulty}</p>
-                      </div>
-                    </div>
-                  )}
-                  
-                  {product.details?.duration && (
-                    <div className="flex items-start">
-                      <div className="bg-gray-100 p-2 rounded-full mr-3">
-                        <Clock className="w-5 h-5 text-gray-500" />
-                      </div>
-                      <div>
-                        <h3 className="text-sm font-medium text-gray-800">Duration</h3>
-                        <p className="text-sm text-gray-600">{product.details.duration}</p>
-                      </div>
-                    </div>
-                  )}
-                  
-                  {product.details?.ageRange && (
-                    <div className="flex items-start">
-                      <div className="bg-gray-100 p-2 rounded-full mr-3">
-                        <Users className="w-5 h-5 text-gray-500" />
-                      </div>
-                      <div>
-                        <h3 className="text-sm font-medium text-gray-800">Age Range</h3>
-                        <p className="text-sm text-gray-600">{product.details.ageRange}</p>
-                      </div>
-                    </div>
-                  )}
-                  
-                  {product.details?.targetAudience && (
-                    <div className="flex items-start">
-                      <div className="bg-gray-100 p-2 rounded-full mr-3">
-                        <Users className="w-5 h-5 text-gray-500" />
-                      </div>
-                      <div>
-                        <h3 className="text-sm font-medium text-gray-800">Target Audience</h3>
-                        <p className="text-sm text-gray-600">{product.details.targetAudience}</p>
-                      </div>
-                    </div>
-                  )}
-                  
-                  {/* Display downloads if available */}
-                  {product.downloads && product.downloads.length > 0 && (
-                    <div className="col-span-1 md:col-span-2 mt-4">
-                      <h3 className="text-sm font-medium text-gray-800 mb-2">Included Files</h3>
-                      <div className="space-y-2">
-                        {product.downloads.map((download, index) => (
-                          <div key={index} className="flex items-center justify-between bg-gray-50 p-2 rounded">
-                            <div className="flex items-center">
-                              <FileText className="w-4 h-4 text-blue-500 mr-2" />
-                              <span className="text-sm">{download.name}</span>
-                            </div>
-                            <div className="flex items-center">
-                              <span className="text-xs text-gray-500 mr-2">
-                                {download.file.split('.').pop()?.toUpperCase()}
-                              </span>
-                              {download.file.toLowerCase().endsWith('.pdf') && !hasPurchased && (
-                                <LockIcon className="w-3 h-3 text-gray-400" />
-                              )}
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                      
-                      {!hasPurchased && (
-                        <div className="mt-4 p-3 bg-gray-50 rounded-lg border border-gray-200 text-center">
-                          <p className="text-sm text-gray-600 flex items-center justify-center">
-                            <LockIcon className="w-4 h-4 mr-2 text-gray-400" />
-                            Purchase required to access these files
-                          </p>
-                        </div>
-                      )}
-                    </div>
-                  )}
-                </div>
-              )}
-              
-              {activeTab === 'reviews' && (
-                <div className="text-center py-6">
-                  <p className="text-gray-500">No reviews yet.</p>
-                </div>
-              )}
+           
             </div>
           </div>
         </div>
@@ -931,6 +945,41 @@ const ResourceDetailPage: React.FC = () => {
                   </div>
                 </div>
               ))}
+            </div>
+          </div>
+        )}
+        
+        {/* PDF List Modal */}
+        {showPdfList && (
+          <div className="fixed inset-0 z-50 bg-black/70 flex items-center justify-center">
+            <div className="bg-white rounded-xl shadow-2xl w-full max-w-md p-6 max-h-[80vh] overflow-auto">
+              <div className="flex justify-between items-center mb-4">
+                <h3 className="text-xl font-bold text-gray-800">Available PDFs</h3>
+                <button 
+                  onClick={handleClosePdfList}
+                  className="text-gray-400 hover:text-gray-600 transition-colors"
+                >
+                  <X className="w-6 h-6" />
+                </button>
+              </div>
+              
+              <div className="space-y-3 mt-4">
+                {availablePdfs.map((pdf, index) => (
+                  <button 
+                    key={index}
+                    onClick={() => handleSelectPdf(pdf)}
+                    className="w-full flex items-center p-3 hover:bg-blue-50 rounded-lg transition-colors group border border-gray-200 hover:border-blue-300"
+                  >
+                    <div className="mr-3 bg-blue-100 text-blue-600 p-2 rounded-lg group-hover:bg-blue-600 group-hover:text-white transition-colors">
+                      <FileText className="w-6 h-6" />
+                    </div>
+                    <div className="text-left">
+                      <p className="font-medium text-gray-800 group-hover:text-blue-700">{pdf.name}</p>
+                      <p className="text-xs text-gray-500">Click to view</p>
+                    </div>
+                  </button>
+                ))}
+              </div>
             </div>
           </div>
         )}

@@ -1,10 +1,8 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import Header from './Header';
 import Footer from './Footer';
-import { Search, Filter, Grid, ShoppingCart, Loader, Tag, FileText, AlertCircle } from 'lucide-react';
-import { useCart } from '../context/CartContext';
-import { toast } from 'react-hot-toast';
+import { Search, Filter, Grid, Loader, Tag, FileText, AlertCircle, ChevronLeft, ChevronRight } from 'lucide-react';
 import { getFirestore, collection, getDocs } from 'firebase/firestore';
 import { app } from '../lib/firebase'; // Import the Firebase app directly
 
@@ -36,28 +34,6 @@ const SAMPLE_PRODUCTS = [
   }
 ];
 
-// Helper function to calculate the "original" price
-// This creates a fake original price that's 10-20% higher than the actual price
-const calculateOriginalPrice = (actualPrice: number): number => {
-  // Random discount between 10% and 20%
-  const discountPercentage = Math.floor(Math.random() * 11) + 10; // 10-20
-  
-  // Calculate the "original" price
-  const originalPrice = actualPrice * (100 / (100 - discountPercentage));
-  
-  // Round to 2 decimal places
-  return Math.round(originalPrice * 100) / 100;
-};
-
-// Helper function to format currency
-const formatCurrency = (amount: number): string => {
-  return new Intl.NumberFormat('en-US', {
-    style: 'currency',
-    currency: 'USD',
-    minimumFractionDigits: 2
-  }).format(amount);
-};
-
 // More flexible interface for Firebase products to handle various field structures
 interface FirebaseProduct {
   id: string;
@@ -66,7 +42,8 @@ interface FirebaseProduct {
   description?: string;
   price?: number | string;
   thumbnail?: string;
-  category?: string;
+  category?: string; // For backward compatibility
+  categories?: Array<string | Category>; // Array of category names or Category objects
   downloads?: Array<{
     id: string;
     name: string;
@@ -79,9 +56,12 @@ interface FirebaseProduct {
   [key: string]: any; // Allow any additional fields
 }
 
+// Category object structure that matches what's coming from Firebase
 interface Category {
-  id: string;
+  id: string | number;
   name: string;
+  slug?: string;
+  [key: string]: any;
 }
 
 // Add a helper function to safely check if text contains HTML
@@ -90,6 +70,10 @@ const containsHtml = (text: string): boolean => {
 };
 
 const CatalogPage: React.FC = () => {
+  const location = useLocation();
+  const navigate = useNavigate();
+  
+  // Initialize state
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const [products, setProducts] = useState<FirebaseProduct[]>([]);
@@ -98,9 +82,23 @@ const CatalogPage: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [usingMockData, setUsingMockData] = useState(false);
   
-  const { addToCart } = useCart();
-  const navigate = useNavigate();
-
+  // Pagination state
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(9); // Number of products per page
+  
+  // Parse URL parameters for category filter
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    const categoryParam = params.get('category');
+    
+    if (categoryParam) {
+      setSelectedCategory(categoryParam);
+    }
+    
+    // Scroll to top when category changes
+    window.scrollTo(0, 0);
+  }, [location.search]);
+  
   // Create Firestore instance directly
   const db = getFirestore(app);
   
@@ -157,6 +155,8 @@ const CatalogPage: React.FC = () => {
               price: productPrice,
               thumbnail: data.thumbnail || data.image || data.images?.[0]?.src || '',
               category: data.category || data.productCategory || 'Uncategorized',
+              categories: Array.isArray(data.categories) ? data.categories : 
+                (data.category ? [data.category] : ['Uncategorized']),
               downloads: data.downloads || [],
               pdfUrl: data.pdfUrl || data.fileUrl || '',
               // Include all original data
@@ -166,9 +166,25 @@ const CatalogPage: React.FC = () => {
             loadedProducts.push(product);
             
             // Add category to set and map
-            const category = product.category || 'Uncategorized';
-            categorySet.add(category);
-            categoryMap[category] = category; // Same ID and name for simplicity
+            // First check if categories array contains objects with name properties
+            if (product.categories && Array.isArray(product.categories)) {
+              product.categories.forEach(cat => {
+                if (typeof cat === 'object' && cat !== null && 'name' in cat) {
+                  categorySet.add(cat.name);
+                  categoryMap[cat.name] = cat.name;
+                } else if (typeof cat === 'string') {
+                  categorySet.add(cat);
+                  categoryMap[cat] = cat;
+                }
+              });
+            }
+            
+            // Fallback to single category field if no categories were added
+            if ((!product.categories || product.categories.length === 0) && product.category) {
+              const category = product.category || 'Uncategorized';
+              categorySet.add(category);
+              categoryMap[category] = category;
+            }
           });
           
           // Convert category set to array of objects
@@ -237,49 +253,64 @@ const CatalogPage: React.FC = () => {
   
   // Filter products based on search and category
   const filteredProducts = useMemo(() => {
-    return products.filter((product: FirebaseProduct) => {
-      const name = product.name || product.title || '';
-      const description = product.description || '';
+    if (!products.length) return [];
+    
+    return products.filter(product => {
+      // Apply search filter
+      const matchesSearch = searchQuery
+        ? (product.name && product.name.toLowerCase().includes(searchQuery.toLowerCase())) ||
+          (product.description && product.description.toLowerCase().includes(searchQuery.toLowerCase()))
+        : true;
       
-      const matchesSearch = 
-        name.toLowerCase().includes(searchQuery.toLowerCase()) || 
-        description.toLowerCase().includes(searchQuery.toLowerCase());
-      
-      const matchesCategory = selectedCategory === 'all' || product.category === selectedCategory;
+      // Apply category filter
+      const matchesCategory = selectedCategory === 'all' ? true : (
+        // Check if product.categories contains a category with matching name
+        (product.categories && Array.isArray(product.categories) && product.categories.some(cat => {
+          // If cat is an object with name property
+          if (typeof cat === 'object' && cat !== null && 'name' in cat) {
+            return cat.name === selectedCategory || cat.id === selectedCategory;
+          }
+          // If cat is a string
+          return cat === selectedCategory;
+        })) ||
+        // Fallback to single category field
+        product.category === selectedCategory
+      );
       
       return matchesSearch && matchesCategory;
     });
   }, [products, searchQuery, selectedCategory]);
-
-  // Create a mapping of product IDs to their "original" prices
-  const originalPrices = useMemo(() => {
-    const priceMap: Record<string, number> = {};
-    
-    products.forEach((product: FirebaseProduct) => {
-      const productPrice = typeof product.price === 'string' 
-        ? parseFloat(product.price) 
-        : (product.price || 0);
-        
-      priceMap[product.id] = calculateOriginalPrice(productPrice);
-    });
-    
-    return priceMap;
-  }, [products]);
   
-  // Calculate the discount percentage for a product
-  const getDiscountPercentage = (actualPrice: number, originalPrice: number): number => {
-    return Math.round(((originalPrice - actualPrice) / originalPrice) * 100);
+  // Calculate total pages
+  const totalPages = Math.ceil(filteredProducts.length / pageSize);
+  
+  // Get current page products
+  const paginatedProducts = useMemo(() => {
+    const startIndex = (currentPage - 1) * pageSize;
+    return filteredProducts.slice(startIndex, startIndex + pageSize);
+  }, [filteredProducts, currentPage, pageSize]);
+  
+  // Reset to page 1 when filters change
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchQuery, selectedCategory]);
+  
+  // Handle page change
+  const goToPage = (page: number) => {
+    if (page < 1 || page > totalPages) return;
+    setCurrentPage(page);
+    window.scrollTo(0, 0);
   };
 
-  // Helper to get product price regardless of format
-  const getProductPrice = (product: FirebaseProduct): number => {
-    if (typeof product.price === 'number') {
-      return product.price;
-    } else if (typeof product.price === 'string') {
-      return parseFloat(product.price) || 0;
-    }
-    return 0;
-  };
+  // Helper to get product price regardless of format - keeping for reference but we don't use it anymore
+  // const getProductPrice = (product: FirebaseProduct): number => {
+  //   if (typeof product.price === 'number') {
+  //     return product.price;
+  //   } else if (typeof product.price === 'string') {
+  //     return parseFloat(product.price) || 0;
+  //   }
+  //   return 0;
+  // };
 
   // Check if product has PDFs
   const hasPdfFiles = (product: FirebaseProduct): boolean => {
@@ -304,6 +335,31 @@ const CatalogPage: React.FC = () => {
     return false;
   };
 
+  // After the hasPdfFiles function, add a new function to get PDF count
+  const getPdfCount = (product: FirebaseProduct): number => {
+    let count = 0;
+    
+    // Count PDFs in downloads array
+    if (product.downloads && product.downloads.length > 0) {
+      const pdfDownloads = product.downloads.filter(download => 
+        download.file && download.file.toLowerCase().endsWith('.pdf')
+      );
+      count += pdfDownloads.length;
+    }
+    
+    // Add direct PDF URL if available
+    if (product.pdfUrl && product.pdfUrl.toLowerCase().endsWith('.pdf')) {
+      count += 1;
+    }
+    
+    // Add fileUrl if available and not already counted
+    if (product.fileUrl && product.fileUrl.toLowerCase().endsWith('.pdf') && product.fileUrl !== product.pdfUrl) {
+      count += 1;
+    }
+    
+    return count;
+  };
+
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col">
       <Header />
@@ -314,6 +370,7 @@ const CatalogPage: React.FC = () => {
           <h1 className="text-4xl font-bold mb-4 bg-clip-text text-transparent bg-gradient-to-r from-[#2bcd82] to-[#25b975]">Resource Catalog</h1>
           <p className="text-lg text-gray-600 max-w-3xl mx-auto">
             Browse our collection of speech therapy resources, worksheets, and materials designed by experienced SLPs.
+            <span className="block mt-2 font-medium text-[#2bcd82]">All resources are included with your subscription!</span>
           </p>
           <div className="mt-6 max-w-sm mx-auto h-1 bg-gradient-to-r from-[#2bcd82] to-transparent rounded-full"></div>
         </div>
@@ -349,12 +406,26 @@ const CatalogPage: React.FC = () => {
               <Filter className="text-gray-500 w-5 h-5" />
               <select
                 value={selectedCategory}
-                onChange={(e) => setSelectedCategory(e.target.value)}
+                onChange={(e) => {
+                  const category = e.target.value;
+                  setSelectedCategory(category);
+                  
+                  // Update URL with the new category parameter
+                  const params = new URLSearchParams(location.search);
+                  if (category === 'all') {
+                    params.delete('category');
+                  } else {
+                    params.set('category', category);
+                  }
+                  
+                  // Replace the current URL to avoid adding to history stack
+                  navigate(`${location.pathname}?${params.toString()}`, { replace: true });
+                }}
                 className="border border-gray-300 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-[#2bcd82] focus:border-[#2bcd82] transition-colors"
               >
                 <option value="all">All Categories</option>
                 {categories.map((category: Category) => (
-                  <option key={category.id} value={category.id}>{category.name}</option>
+                  <option key={category.id} value={category.name}>{category.name}</option>
                 ))}
               </select>
             </div>
@@ -410,7 +481,7 @@ const CatalogPage: React.FC = () => {
         {/* Grid View */}
         {!loading && filteredProducts.length > 0 && (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {filteredProducts.map((product: FirebaseProduct) => (
+            {paginatedProducts.map((product: FirebaseProduct) => (
               <div onClick={() => navigate(`/catalog/${product.id}`)} key={product.id} className="bg-white cursor-pointer rounded-xl overflow-hidden shadow-sm hover:shadow-md transition-all duration-300 flex flex-col h-full border border-gray-100">
                 <div className="relative h-48 overflow-hidden bg-gray-100">
                   {product.thumbnail ? (
@@ -429,22 +500,15 @@ const CatalogPage: React.FC = () => {
                   {hasPdfFiles(product) && (
                     <div className="absolute top-0 left-0 bg-blue-500 text-white px-3 py-1 rounded-br-lg text-sm font-bold flex items-center">
                       <FileText className="w-4 h-4 mr-1" />
-                      PDF
+                      {getPdfCount(product) > 1 ? `${getPdfCount(product)} PDFs` : "PDF"}
                     </div>
                   )}
                   
-                  {/* Sale Tag */}
-                  {getProductPrice(product) > 0 ? (
-                    <div className="absolute top-0 right-0 bg-[#fb6a69] text-white px-3 py-1 rounded-bl-lg text-sm font-bold flex items-center">
-                      <Tag className="w-4 h-4 mr-1" />
-                      {getDiscountPercentage(getProductPrice(product), originalPrices[product.id])}% OFF
-                    </div>
-                  ) : (
-                    <div className="absolute top-0 right-0 bg-[#2bcd82] text-white px-3 py-1 rounded-bl-lg text-sm font-bold flex items-center">
-                      <Tag className="w-4 h-4 mr-1" />
-                      FREE
-                    </div>
-                  )}
+                  {/* Subscription badge instead of sale tag */}
+                  <div className="absolute top-0 right-0 bg-[#2bcd82] text-white px-3 py-1 rounded-bl-lg text-sm font-bold flex items-center">
+                    <Tag className="w-4 h-4 mr-1" />
+                    INCLUDED
+                  </div>
                 </div>
                 
                 <div className="p-5 flex flex-col flex-grow">
@@ -488,51 +552,150 @@ const CatalogPage: React.FC = () => {
                   </div>
                   
                   <div className="mt-auto flex items-center justify-between">
-                    <div className="flex flex-col">
-                      {getProductPrice(product) > 0 ? (
-                        <>
-                          {/* Original Price (crossed out) */}
-                          <span className="text-gray-500 line-through text-sm">
-                            {formatCurrency(originalPrices[product.id])}
-                          </span>
-                          
-                          {/* Sale Price */}
-                          <span className="text-[#fb6a69] font-bold text-lg">
-                            {formatCurrency(getProductPrice(product))}
-                          </span>
-                        </>
-                      ) : (
-                        /* Free Product Price */
-                        <span className="text-[#2bcd82] font-bold text-lg">
-                          Free
-                        </span>
-                      )}
-                    </div>
                     
                     <div className="flex space-x-2">
                       <button 
                         className="text-white bg-[#2bcd82] flex items-center gap-2 hover:bg-[#25b975] p-2 rounded-lg transition-colors"
                         onClick={(e) => {
                           e.stopPropagation();
-                          addToCart({
-                            id: parseInt(product.id, 10) || Math.floor(Math.random() * 10000),
-                            title: product.name || product.title || 'Unnamed Product',
-                            description: product.description || '',
-                            category: product.category || 'Uncategorized',
-                            imageUrl: product.thumbnail || '',
-                            price: getProductPrice(product).toString(),
-                            quantity: 1
-                          });
-                          toast.success(`${product.name || product.title || 'Product'} added to cart!`);
+                          // Navigate to the product detail page
+                          navigate(`/catalog/${product.id}`);
                         }}
                       >
-                        <ShoppingCart size={20} /> Add to Cart
+                        {getPdfCount(product) > 1 ? (
+                          <>View {getPdfCount(product)} PDFs</>
+                        ) : (
+                          <>View Details</>
+                        )}
                       </button>
                     </div>
                   </div>
                 </div>
+
+                {/* Category Tags - Updated to show multiple categories */}
+                <div className="absolute top-0 right-0 flex flex-wrap justify-end gap-1 p-1 z-10">
+                  {product.categories && product.categories.length > 0 ? (
+                    product.categories.map((cat, idx) => (
+                      <span 
+                        key={idx} 
+                        className="text-xs px-2 py-1 bg-blue-50 text-blue-700 rounded-full shadow-sm"
+                      >
+                        {typeof cat === 'object' && cat !== null && 'name' in cat ? cat.name : cat}
+                      </span>
+                    ))
+                  ) : product.category ? (
+                    <span className="text-xs px-2 py-1 bg-blue-50 text-blue-700 rounded-full shadow-sm">
+                      {product.category}
+                    </span>
+                  ) : null}
+                </div>
               </div>
             ))}
+          </div>
+        )}
+        
+        {/* Pagination Controls */}
+        {!loading && filteredProducts.length > 0 && (
+          <div className="mt-10 flex flex-col items-center">
+            <p className="text-gray-500 mb-3">
+              Showing {((currentPage - 1) * pageSize) + 1}-{Math.min(currentPage * pageSize, filteredProducts.length)} of {filteredProducts.length} products
+            </p>
+            
+            <div className="flex flex-wrap justify-center items-center gap-3">
+              <button
+                className={`flex items-center px-4 py-2 rounded-md transition-all ${
+                  currentPage === 1 
+                    ? 'bg-gray-100 text-gray-400 cursor-not-allowed' 
+                    : 'bg-white text-gray-700 border border-gray-200 hover:shadow-md hover:border-gray-300'
+                }`}
+                onClick={() => goToPage(currentPage - 1)}
+                disabled={currentPage === 1}
+              >
+                <ChevronLeft className="w-4 h-4 mr-1" />
+                Prev
+              </button>
+              
+              {/* Page Numbers with Ellipsis */}
+              <div className="flex items-center">
+                {/* First page always shown */}
+                {totalPages > 5 && currentPage > 3 && (
+                  <>
+                    <button
+                      className="w-10 h-10 mx-1 rounded-md font-medium flex items-center justify-center transition-all bg-white text-gray-700 border border-gray-200 hover:bg-gray-50 hover:border-primary shadow-sm"
+                      onClick={() => goToPage(1)}
+                    >
+                      1
+                    </button>
+                    {currentPage > 4 && (
+                      <span className="mx-1 text-gray-500 w-10 text-center">...</span>
+                    )}
+                  </>
+                )}
+                
+                {/* Dynamically calculated pages */}
+                {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                  let pageNum;
+                  if (totalPages <= 5) {
+                    pageNum = i + 1;
+                  } else if (currentPage <= 3) {
+                    pageNum = i + 1;
+                  } else if (currentPage >= totalPages - 2) {
+                    pageNum = totalPages - 4 + i;
+                  } else {
+                    pageNum = currentPage - 2 + i;
+                  }
+                  
+                  // Skip if it's the first or last page and would be shown separately
+                  if ((totalPages > 5) && 
+                      ((pageNum === 1 && currentPage > 3) || 
+                       (pageNum === totalPages && currentPage < totalPages - 2))) {
+                    return null;
+                  }
+                  
+                  return (
+                    <button
+                      key={pageNum}
+                      className={`w-10 h-10 mx-1 rounded-md font-medium flex items-center justify-center transition-all duration-200 ${
+                        currentPage === pageNum
+                          ? 'bg-[#2bcd82] text-white shadow-md transform scale-110'
+                          : 'bg-white text-gray-700 border border-gray-200 hover:bg-gray-50 hover:border-primary shadow-sm'
+                      }`}
+                      onClick={() => goToPage(pageNum)}
+                    >
+                      {pageNum}
+                    </button>
+                  );
+                })}
+                
+                {/* Last page always shown */}
+                {totalPages > 5 && currentPage < totalPages - 2 && (
+                  <>
+                    {currentPage < totalPages - 3 && (
+                      <span className="mx-1 text-gray-500 w-10 text-center">...</span>
+                    )}
+                    <button
+                      className="w-10 h-10 mx-1 rounded-md font-medium flex items-center justify-center transition-all bg-white text-gray-700 border border-gray-200 hover:bg-gray-50 hover:border-primary shadow-sm"
+                      onClick={() => goToPage(totalPages)}
+                    >
+                      {totalPages}
+                    </button>
+                  </>
+                )}
+              </div>
+              
+              <button
+                className={`flex items-center px-4 py-2 rounded-md transition-all ${
+                  currentPage === totalPages 
+                    ? 'bg-gray-100 text-gray-400 cursor-not-allowed' 
+                    : 'bg-white text-gray-700 border border-gray-200 hover:shadow-md hover:border-gray-300'
+                }`}
+                onClick={() => goToPage(currentPage + 1)}
+                disabled={currentPage === totalPages}
+              >
+                Next
+                <ChevronRight className="w-4 h-4 ml-1" />
+              </button>
+            </div>
           </div>
         )}
       </main>

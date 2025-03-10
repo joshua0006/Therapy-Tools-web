@@ -1,13 +1,19 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
-import { Mail, MapPin, Facebook, Instagram, Youtube } from 'lucide-react';
+import { Mail, MapPin, Facebook, Instagram, Youtube, Tag } from 'lucide-react';
 import Logo from '../assets/images/cicle-logo.png';
 import { useAuth } from '../context/AuthContext';
+import { useCategories } from '../context/CategoriesContext';
 import LeadCapture from './LeadCapture';
-
 
 const Footer: React.FC = () => {
   const { isLoggedIn } = useAuth();
+  const { categories, loading } = useCategories();
+  
+  // Get top categories (limit to 6 for display)
+  const topCategories = categories
+    .sort((a, b) => (b.count || 0) - (a.count || 0))
+    .slice(0, 6);
 
   return (
     <footer className="bg-gray-800 text-white">
@@ -22,8 +28,8 @@ const Footer: React.FC = () => {
       {/* Main Footer */}
       <div className="py-12">
         <div className="container mx-auto px-4">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-            <div>
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-8">
+            <div className="md:col-span-1">
               <div className="flex items-center mb-4">
                 <img src={Logo} alt="Adventures in Speech" className="h-10 w-10 mr-2" />
                 <h3 className="text-xl font-bold">
@@ -46,7 +52,7 @@ const Footer: React.FC = () => {
               </div>
             </div>
             
-            <div>
+            <div className="md:col-span-1">
               <h4 className="text-lg font-bold mb-5 text-white">Quick Links</h4>
               <ul className="space-y-3">
                 <li><Link to="/" className="text-gray-300 hover:text-[#2bcd82] transition-colors">Home</Link></li>
@@ -58,7 +64,43 @@ const Footer: React.FC = () => {
               </ul>
             </div>
             
-            <div>
+            <div className="md:col-span-1">
+              <h4 className="text-lg font-bold mb-5 text-white flex items-center">
+                <Tag className="w-4 h-4 mr-2 text-[#2bcd82]" />
+                Categories
+              </h4>
+              {loading ? (
+                <p className="text-gray-400 text-sm">Loading categories...</p>
+              ) : (
+                <ul className="space-y-3">
+                  {topCategories.map(category => (
+                    <li key={category.id}>
+                      <Link 
+                        to={`/catalog?category=${encodeURIComponent(category.name)}`} 
+                        className="text-gray-300 hover:text-[#2bcd82] transition-colors flex items-center"
+                      >
+                        <span>{category.name}</span>
+                        {category.count && category.count > 0 && (
+                          <span className="ml-2 text-xs bg-[#2bcd82]/20 text-[#2bcd82] px-1.5 py-0.5 rounded-full">
+                            {category.count}
+                          </span>
+                        )}
+                      </Link>
+                    </li>
+                  ))}
+                  <li>
+                    <Link 
+                      to="/catalog" 
+                      className="text-[#2bcd82] hover:text-[#25b975] transition-colors text-sm font-medium"
+                    >
+                      View All Categories →
+                    </Link>
+                  </li>
+                </ul>
+              )}
+            </div>
+            
+            <div className="md:col-span-1">
               <h4 className="text-lg font-bold mb-5 text-white">Contact Us</h4>
               <ul className="space-y-3">
                 <li className="flex items-center">
@@ -84,8 +126,8 @@ const Footer: React.FC = () => {
               &copy; {new Date().getFullYear()} Adventures in Speech. All rights reserved.
             </p>
             <div className="flex space-x-6">
-              <Link to="/privacy" className="text-gray-400 hover:text-[#2bcd82] text-sm transition-colors">Privacy Policy</Link>
-              <Link to="/terms" className="text-gray-400 hover:text-[#2bcd82] text-sm transition-colors">Terms of Service</Link>
+              <Link to="/privacy-policy" className="text-gray-400 hover:text-[#2bcd82] text-sm transition-colors">Privacy Policy</Link>
+              <Link to="/terms-of-use" className="text-gray-400 hover:text-[#2bcd82] text-sm transition-colors">Terms of Service</Link>
             </div>
           </div>
         </div>

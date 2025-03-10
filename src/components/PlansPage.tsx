@@ -122,7 +122,7 @@ const PlansPage: React.FC = () => {
                 variant="secondary" 
                 size="small" 
                 className="text-xs"
-                onClick={() => navigate('/settings')}
+                onClick={() => navigate('/settings?tab=subscription')}
               >
                 Manage Subscription
               </Button>

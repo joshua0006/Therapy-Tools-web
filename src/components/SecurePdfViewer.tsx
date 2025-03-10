@@ -155,7 +155,9 @@ const SecurePdfViewer: React.FC<SecurePdfViewerProps> = ({ productId, onClose, p
         <div className="bg-gray-800 text-white px-4 py-3 flex justify-between items-center">
           <div className="flex items-center truncate">
             <FileText className="mr-2 flex-shrink-0" size={20} />
-            <h2 className="text-lg font-semibold truncate">{productName || 'PDF Document'}</h2>
+            <h2 className="text-lg font-semibold truncate">
+              {productName || pdfDetails?.name || 'PDF Document'}
+            </h2>
           </div>
           <button 
             onClick={onClose}
