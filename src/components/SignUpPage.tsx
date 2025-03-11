@@ -91,7 +91,7 @@ const SignUpPage: React.FC = () => {
   const [submitting, setSubmitting] = useState(false);
   
   // Extract any redirect information from location state
-  const redirectUrl = location.state?.redirectUrl || '/dashboard';
+  const redirectUrl = location.state?.redirectUrl || '/';
   const redirectMessage = location.state?.message;
   
   // Redirect if already logged in
