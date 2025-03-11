@@ -154,17 +154,17 @@ const PlansPage: React.FC = () => {
                 {premiumFeatures.map((feature, index) => (
                   <div 
                     key={index} 
-                    className={`flex items-start p-2 rounded-lg ${
-                      feature.highlight 
-                        ? 'bg-green-50 border border-green-100' 
-                        : ''
+                    className={`flex items-start p-3 rounded-lg border ${
+                      [0, 3, 4].includes(index)
+                        ? 'bg-green-50 border-green-100 shadow-sm' 
+                        : 'bg-gray-50 border-gray-100'
                     }`}
                   >
                     <div className="mr-2 mt-0.5">
                       {feature.icon}
                     </div>
                     <div>
-                      <span className="text-gray-800 text-sm font-medium">
+                      <span className={`text-sm font-medium ${[1, 4, 5].includes(index) ? 'text-gray-900' : 'text-gray-800'}`}>
                         {feature.text}
                       </span>
                     </div>

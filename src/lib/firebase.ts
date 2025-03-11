@@ -28,5 +28,6 @@ export {
   getUserProfile,
   recordPurchase,
   getUserPurchases,
-  getPurchase
+  getPurchase,
+  getFeaturedProducts
 } from './firebase/firestore';

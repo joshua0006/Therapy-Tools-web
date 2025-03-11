@@ -5,7 +5,6 @@ import SpeechLogo from '../assets/images/logo.png';
 import { useAuth } from '../context/AuthContext';
 import { useCategories } from '../context/CategoriesContext';
 
-
 const Footer: React.FC = () => {
   const { isLoggedIn } = useAuth();
   const { categories, loading } = useCategories();
@@ -91,7 +90,7 @@ const Footer: React.FC = () => {
             
             {/* Quick Links Column */}
             <div className="col-span-1">
-              <div className="bg-white p-5 rounded-lg h-full">
+              <div className="p-5 rounded-lg h-full">
                 <h4 className="text-base sm:text-lg font-bold mb-4 sm:mb-5 text-gray-900 border-b pb-2 border-gray-100">Quick Links</h4>
                 <ul className="space-y-3 sm:space-y-4 text-sm sm:text-base">
                   <li>
@@ -130,7 +129,7 @@ const Footer: React.FC = () => {
             
             {/* Categories Column */}
             <div className="col-span-1">
-              <div className="bg-white p-5 rounded-lg h-full">
+              <div className=" p-5 rounded-lg h-full">
                 <h4 className="text-base sm:text-lg font-bold mb-4 sm:mb-5 text-gray-900 border-b pb-2 border-gray-100 flex items-center">
                   <Tag className="w-4 h-4 mr-2 text-[#2bcd82]" />
                   Categories
@@ -172,28 +171,26 @@ const Footer: React.FC = () => {
             
             {/* Contact Column - Full width on small screens, normal on larger */}
             <div className="col-span-2 sm:col-span-2 lg:col-span-1">
-              <div className="bg-white p-5 rounded-lg h-full">
+              <div className="p-5 rounded-lg h-full">
                 <h4 className="text-base sm:text-lg font-bold mb-4 sm:mb-5 text-gray-900 border-b pb-2 border-gray-100">Contact Us</h4>
                 <ul className="space-y-4 text-sm sm:text-base">
-                  <li className="flex items-center">
-                    <div className="bg-[#2bcd82]/10 p-2 rounded-full mr-3 flex-shrink-0">
-                      <Mail className="w-5 h-5 text-[#2bcd82]" />
-                    </div>
-                    <div>
-
-                      <a href="mailto:support@adventuresinspeechpathology.com" 
-                         className="text-gray-600 hover:text-[#2bcd82] transition-colors truncate font-medium">
-                        support@adventuresinspeechpathology.com
-                      </a>
-                    </div>
-                  </li>
+                <li className="flex items-center">
+  <div className="bg-[#2bcd82]/10 p-2 rounded-full mr-3 flex-shrink-0">
+    <Mail className="w-5 h-5 text-[#2bcd82]" />
+  </div>
+  <div className="min-w-0 flex-1">
+    <a href="mailto:support@adventuresinspeechpathology.com" 
+       className="block text-gray-600 hover:text-[#2bcd82] transition-colors truncate font-medium text-sm md:text-base">
+      support@adventuresinspeechpathology.com
+    </a>
+  </div>
+</li>
                 
                   <li className="flex items-start">
                     <div className="bg-[#2bcd82]/10 p-2 rounded-full mr-3 flex-shrink-0 mt-1">
                       <MapPin className="w-5 h-5 text-[#2bcd82]" />
                     </div>
                     <div>
-                      
                       <address className="text-gray-600 not-italic font-medium">
                         2/17 Arnott St, <br /> 
                         Edgeworth NSW 2285 <br /> 
@@ -201,8 +198,6 @@ const Footer: React.FC = () => {
                       </address>
                     </div>
                   </li>
-
-            
                 </ul>
               </div>
             </div>

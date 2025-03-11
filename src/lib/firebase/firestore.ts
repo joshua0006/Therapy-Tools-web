@@ -28,6 +28,7 @@ const db = getFirestore(app);
 // Collection references
 const usersCollection = collection(db, 'users');
 const purchasesCollection = collection(db, 'purchases');
+const productsCollection = collection(db, 'products');
 
 // Add BillingAddress interface
 interface BillingAddress {
@@ -479,6 +480,104 @@ export async function getUserShippingInformation(userId: string): Promise<Shippi
     return [];
   } catch (error) {
     console.error('Error retrieving shipping information:', error);
+    return [];
+  }
+}
+
+/**
+ * Get featured products from Firebase
+ */
+export async function getFeaturedProducts(limit: number = 3) {
+  try {
+    console.log('Fetching featured products from Firebase...');
+    
+    // Get products collection and limit to the specified number
+    const productsQuery = query(productsCollection);
+    const productsSnapshot = await getDocs(productsQuery);
+    
+    if (productsSnapshot.empty) {
+      console.log('No products found in the collection');
+      return [];
+    }
+    
+    console.log(`Found ${productsSnapshot.size} products`);
+    
+    const loadedProducts: any[] = [];
+    
+    productsSnapshot.forEach((doc) => {
+      const data = doc.data();
+      console.log(`Product data for ${doc.id}:`, data);
+      
+      // Extract price, handling various formats
+      let productPrice = 0;
+      if (typeof data.price === 'number') {
+        productPrice = data.price;
+      } else if (typeof data.price === 'string') {
+        // Remove currency symbols and convert to number
+        productPrice = parseFloat(data.price.replace(/[^0-9.-]+/g, '')) || 0;
+      }
+      
+      const product = {
+        id: doc.id,
+        name: data.name || data.title || 'Unnamed Product',
+        description: data.description || data.content || '',
+        price: productPrice,
+        thumbnail: data.thumbnail || data.image || data.images?.[0]?.src || '',
+        category: data.category || data.productCategory || 'Uncategorized',
+        categories: Array.isArray(data.categories) ? data.categories : 
+          (data.category ? [data.category] : ['Uncategorized']),
+        downloads: data.downloads || [],
+        pdfUrl: data.pdfUrl || data.fileUrl || '',
+        featured: data.featured || false,
+        // Include all original data
+        ...data
+      };
+      
+      // Only add featured products or all if there aren't enough featured ones
+      if (data.featured) {
+        loadedProducts.push(product);
+      }
+    });
+    
+    // If we don't have enough featured products, add non-featured ones
+    if (loadedProducts.length < limit) {
+      productsSnapshot.forEach((doc) => {
+        const data = doc.data();
+        if (!data.featured && loadedProducts.length < limit) {
+          // Extract price, handling various formats
+          let productPrice = 0;
+          if (typeof data.price === 'number') {
+            productPrice = data.price;
+          } else if (typeof data.price === 'string') {
+            // Remove currency symbols and convert to number
+            productPrice = parseFloat(data.price.replace(/[^0-9.-]+/g, '')) || 0;
+          }
+          
+          const product = {
+            id: doc.id,
+            name: data.name || data.title || 'Unnamed Product',
+            description: data.description || data.content || '',
+            price: productPrice,
+            thumbnail: data.thumbnail || data.image || data.images?.[0]?.src || '',
+            category: data.category || data.productCategory || 'Uncategorized',
+            categories: Array.isArray(data.categories) ? data.categories : 
+              (data.category ? [data.category] : ['Uncategorized']),
+            downloads: data.downloads || [],
+            pdfUrl: data.pdfUrl || data.fileUrl || '',
+            featured: data.featured || false,
+            // Include all original data
+            ...data
+          };
+          
+          loadedProducts.push(product);
+        }
+      });
+    }
+    
+    // Return only the requested number of products
+    return loadedProducts.slice(0, limit);
+  } catch (err) {
+    console.error('Error fetching featured products:', err);
     return [];
   }
 } 

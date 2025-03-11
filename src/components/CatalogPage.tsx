@@ -508,7 +508,7 @@ const CatalogPage: React.FC = () => {
                 </div>
                 
                 <div className="p-5 flex flex-col flex-grow">
-                  <div className="h-14 mb-2 flex flex-col justify-center">
+                  <div className="h-14 mb-2 flex flex-col justify-start">
                     <h3 
                       className="text-lg font-bold text-gray-800 hover:text-[#2bcd82] transition-colors line-clamp-2 leading-tight"
                       title={product.name || product.title || 'Unnamed Product'}
