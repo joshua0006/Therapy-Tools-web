@@ -5,7 +5,7 @@
  * This file can be safely deleted after testing.
  */
 
-import { getWooConfig } from './config';
+import { getWooConfig } from '../api/apiService';
 import OAuth from 'oauth-1.0a';
 import CryptoJS from 'crypto-js';
 import { mockEvents } from '../../data/mockEvents';

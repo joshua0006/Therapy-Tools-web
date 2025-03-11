@@ -7,7 +7,7 @@
  * - Error handling and data validation
  */
 
-import { makeWooRequest } from './config';
+import { makeWooRequest } from '../api/apiService';
 import type { WooProduct, Product, Category, WooCategory } from '../../types';
 
 /**

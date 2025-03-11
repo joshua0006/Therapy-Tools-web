@@ -7,7 +7,7 @@
  * - Provides error handling and data validation
  */
 
-import { getWooConfig } from './config';
+import { getWooConfig } from '../api/apiService';
 import { mockEvents } from '../../data/mockEvents';
 import { mockNews } from '../../data/mockNews';
 
