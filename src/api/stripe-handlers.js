@@ -11,11 +11,17 @@ const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
  */
 exports.createPaymentIntent = async (req, res) => {
   try {
-    const { amount, productName } = req.body;
+    const { amount, productName, isSubscription = false, billingCycle = 'yearly' } = req.body;
     
     // Validate the amount
     if (!amount || amount <= 0) {
       return res.status(400).json({ error: 'Invalid amount' });
+    }
+
+    // Validate annual subscription amount
+    if (isSubscription && billingCycle === 'yearly' && amount !== 250000) {
+      console.warn(`Warning: Annual subscription amount ${amount} doesn't match expected 250000 cents ($2,500.00)`);
+      // Continue processing but log the warning
     }
 
     // Create a payment intent
@@ -24,7 +30,14 @@ exports.createPaymentIntent = async (req, res) => {
       currency: 'usd',
       metadata: {
         productName,
+        isSubscription: isSubscription ? 'true' : 'false',
+        billingCycle,
+        planType: 'premium',
+        priceInDollars: (amount / 100).toFixed(2),
       },
+      description: isSubscription 
+        ? `Annual Premium Subscription - $${(amount / 100).toFixed(2)}` 
+        : productName,
       // You can add automatic payment methods here
       automatic_payment_methods: {
         enabled: true,
@@ -60,6 +73,19 @@ exports.handleWebhookEvent = async (req, res) => {
     switch (event.type) {
       case 'payment_intent.succeeded':
         const paymentIntent = event.data.object;
+        
+        // Check if this is an annual subscription payment
+        const isSubscription = paymentIntent.metadata.isSubscription === 'true';
+        const billingCycle = paymentIntent.metadata.billingCycle;
+        
+        if (isSubscription && billingCycle === 'yearly') {
+          console.log(`Processing annual subscription payment: $${paymentIntent.metadata.priceInDollars}`);
+          
+          // Verify the amount is correct for annual subscription
+          if (paymentIntent.amount !== 250000) {
+            console.warn(`Payment amount ${paymentIntent.amount} doesn't match expected annual subscription price 250000`);
+          }
+        }
        
         // Update user membership or deliver digital product here
         await updateUserMembership(paymentIntent);
@@ -67,6 +93,7 @@ exports.handleWebhookEvent = async (req, res) => {
       case 'payment_intent.payment_failed':
       
         // Handle failed payment here
+        console.error(`Payment failed: ${event.data.object.id}`);
         break;
       default:
         console.log(`Unhandled event type: ${event.type}`);
@@ -86,12 +113,26 @@ exports.handleWebhookEvent = async (req, res) => {
  */
 async function updateUserMembership(paymentIntent) {
   // In a real application, you would update the user's membership status in your database
-  // This is just a placeholder function
   console.log(`Updating membership for payment ${paymentIntent.id}`);
+
+  // Check if this is a subscription payment
+  const isSubscription = paymentIntent.metadata.isSubscription === 'true';
+  const billingCycle = paymentIntent.metadata.billingCycle;
+  
+  if (isSubscription) {
+    console.log(`Setting up ${billingCycle} subscription`);
+    
+    // For annual subscription, set expiration date to 1 year from now
+    if (billingCycle === 'yearly') {
+      const expirationDate = new Date();
+      expirationDate.setFullYear(expirationDate.getFullYear() + 1);
+      console.log(`Subscription will expire on ${expirationDate.toISOString()}`);
+    }
+  }
 
   // Example implementation:
   // 1. Extract user ID from payment intent metadata or customer
-  // 2. Update user membership in database
+  // 2. Update user membership in database with correct expiration date (1 year from now)
   // 3. Send confirmation email to user
   
   return true;

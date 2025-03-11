@@ -26,11 +26,6 @@ const CheckoutPage: React.FC<CheckoutPageProps> = ({ productId }) => {
   const [isCartLoaded, setIsCartLoaded] = useState(false);
   const [isLoading, setIsLoading] = useState<boolean>(false);
   
-  // Contact information state
-  const [contactInfo, setContactInfo] = useState({
-    email: ''
-  });
-
   // Add termsAgreed state
   const [termsAgreed, setTermsAgreed] = useState(false);
 
@@ -43,15 +38,6 @@ const CheckoutPage: React.FC<CheckoutPageProps> = ({ productId }) => {
 
   // Use the useAuth hook instead of direct context consumption
   const auth = useAuth();
-
-  // Handle contact info change
-  const handleContactInfoChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
-    const { name, value } = e.target;
-    setContactInfo(prevInfo => ({
-      ...prevInfo,
-      [name]: value
-    }));
-  };
 
   // Get cart info with error handling
   let cartItems: CartItem[] = [];
@@ -148,8 +134,11 @@ const CheckoutPage: React.FC<CheckoutPageProps> = ({ productId }) => {
   };
 
   const handlePaymentComplete = async (success: boolean, transactionId?: string, error?: string) => {
+    console.log('Payment completion handler triggered:', { success, transactionId });
+    
     if (success) {
       setIsLoading(true); // Show loading animation immediately
+      setPaymentError(null); // Clear any previous errors
       
       try {
         // Prepare the purchase data with proper type checks
@@ -161,15 +150,14 @@ const CheckoutPage: React.FC<CheckoutPageProps> = ({ productId }) => {
           image: product.imageUrl
         }];
         
-        // Create base purchase data object
+        // Create base purchase data object with type annotation
         const purchaseData: any = {
           items: purchaseItems,
           paymentMethod: 'stripe', // Always use Stripe
           transactionId: transactionId || 'unknown',
           total: showCartItems ? getTotalPrice().toFixed(2) : (product.amount / 100).toFixed(2),
           purchaseDate: new Date().toISOString(),
-          status: 'completed',
-          email: contactInfo.email,
+          status: 'completed'
         };
         
         // Only add subscription data if this is actually a plan purchase with a valid planId
@@ -179,40 +167,45 @@ const CheckoutPage: React.FC<CheckoutPageProps> = ({ productId }) => {
             billingCycle: 'yearly', // Always yearly
             price: (product.amount / 100).toFixed(2),
             status: 'active',
-            endDate: new Date(new Date().setMonth(
-              new Date().getMonth() + 12 // Always 12 months
+            endDate: new Date(new Date().setFullYear(
+              new Date().getFullYear() + 1 // Set to 1 year from now
             )).toISOString()
           };
-        } else {
-          // Explicitly set subscription to null instead of undefined
-          // (Firestore accepts null but not undefined)
-          purchaseData.subscription = null;
         }
         
-        console.log('Final purchase data being sent:', JSON.stringify(purchaseData, null, 2));
+        console.log('Final purchase data being processed:', JSON.stringify(purchaseData, null, 2));
         
         // Save purchase to database
         if (isLoggedIn && user) {
-          await recordUserPurchase(purchaseData);
+          try {
+            await recordUserPurchase(purchaseData);
+            console.log('Purchase successfully recorded to database');
+          } catch (err) {
+            console.error('Error recording purchase to database:', err);
+            // Continue with checkout even if database record fails
+          }
+        } else {
+          console.log('User not logged in, skipping database record');
         }
         
         setPaymentId(transactionId || 'TEMP-' + Date.now());
         setIsPurchaseComplete(true);
         
-        // Instead of showing completion UI in place, redirect to thank you page
+        // Navigate to thank you page
+        console.log('Navigating to thank you page...');
         navigate('/thankyou', { 
           state: { 
             transactionId, 
-            amount: getTotalPrice().toFixed(2),
-            email: contactInfo.email 
+            amount: (product.amount / 100).toFixed(2) // Use product amount for clarity
           } 
         });
       } catch (err) {
-        console.error('Error recording purchase:', err);
-        setPaymentError('Failed to record your purchase. Please contact support.');
+        console.error('Error during payment completion process:', err);
+        setPaymentError('Failed to complete your purchase. Please try again or contact support.');
         setIsLoading(false);
       }
     } else {
+      console.error('Payment failed:', error);
       setPaymentError(error || 'Payment failed. Please try again.');
       setIsLoading(false);
     }
@@ -235,7 +228,15 @@ const CheckoutPage: React.FC<CheckoutPageProps> = ({ productId }) => {
 
   // Update handleContinueToPayment to simply validate the form without calling validateCardForm
   const validateCheckoutForm = (): boolean => {
-    return contactInfo.email !== '' && termsAgreed;
+    let isValid = true;
+    
+    // Validate terms agreement
+    if (!termsAgreed) {
+      highlightTermsIfNeeded();
+      isValid = false;
+    }
+    
+    return isValid;
   };
 
   // Add a new function to handle highlighting when payment is attempted
@@ -321,6 +322,20 @@ const CheckoutPage: React.FC<CheckoutPageProps> = ({ productId }) => {
 
   // Add auth information to check for existing subscription
   const hasActiveSubscription = isSubscriptionActive();
+
+  // Add this debug log in the component before returning JSX
+  // Verify payment amount
+  useEffect(() => {
+    // Ensure annual subscription is set to $2500
+    if (product.id === 'premium' && product.billingCycle === 'yearly') {
+      const expectedAmount = 250000; // $2500.00 in cents
+      if (product.amount !== expectedAmount) {
+        console.error(`Error: Annual subscription amount (${product.amount}) doesn't match expected $2,500.00 (${expectedAmount})`);
+      } else {
+        console.log(`Verified annual subscription amount: $${(product.amount / 100).toFixed(2)}`);
+      }
+    }
+  }, [product.id, product.billingCycle, product.amount]);
 
   return (
     <div className="bg-[#f8f9fa]">
@@ -418,7 +433,7 @@ const CheckoutPage: React.FC<CheckoutPageProps> = ({ productId }) => {
                     {/* Use the StripePayment component instead of custom card fields */}
                     <StripePayment 
                       amount={paymentAmount}
-                      productName={product.name}
+                      productName={`Premium Annual Subscription - $${(paymentAmount / 100).toFixed(2)}`}
                       onPaymentComplete={handlePaymentComplete}
                       validateCheckout={validateCheckoutForm}
                       highlightTermsIfNeeded={highlightTermsIfNeeded}
