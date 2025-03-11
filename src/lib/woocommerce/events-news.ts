@@ -206,7 +206,7 @@ function transformNews(wpPost: WPPost): News {
  */
 export async function fetchEvents(): Promise<Event[]> {
   try {
-    console.log('Fetching events from WordPress...');
+ 
     const config = getWooConfig();
     
     // Try different potential endpoints for events
@@ -223,19 +223,19 @@ export async function fetchEvents(): Promise<Event[]> {
     // Try each endpoint until one works
     for (const endpoint of possibleEndpoints) {
       try {
-        console.log(`Attempting to fetch events from: ${endpoint}`);
+       
         const response = await fetch(endpoint);
         
         if (response.ok) {
           const data = await response.json();
           // Handle different response formats
           events = Array.isArray(data) ? data : (data.events || data);
-          console.log(`✅ Successfully retrieved events from ${endpoint}`);
+         
           break;
         }
       } catch (err) {
         error = err;
-        console.log(`Endpoint ${endpoint} failed, trying next...`);
+       
       }
     }
     
@@ -256,7 +256,7 @@ export async function fetchEvents(): Promise<Event[]> {
  */
 export async function fetchNews(): Promise<News[]> {
   try {
-    console.log('Fetching news from WordPress...');
+   
     const config = getWooConfig();
     const url = `${config.url}/wp-json/wp/v2/posts?_embed`;
     
@@ -267,7 +267,7 @@ export async function fetchNews(): Promise<News[]> {
     
     const posts = await response.json();
     if (posts && Array.isArray(posts) && posts.length > 0) {
-      console.log(`✅ Successfully retrieved ${posts.length} posts`);
+     
       return posts.map(transformNews);
     } else {
       throw new Error('No posts found or invalid response format');
@@ -287,7 +287,7 @@ export async function fetchNews(): Promise<News[]> {
  */
 export async function fetchEventDetails(eventId: number): Promise<Event | null> {
   try {
-    console.log(`Fetching details for event ${eventId}...`);
+  
     const config = getWooConfig();
     
     // Try different potential endpoints for the event
@@ -302,17 +302,17 @@ export async function fetchEventDetails(eventId: number): Promise<Event | null> 
     // Try each endpoint until one works
     for (const endpoint of possibleEndpoints) {
       try {
-        console.log(`Attempting to fetch event details from: ${endpoint}`);
+     
         const response = await fetch(endpoint);
         
         if (response.ok) {
           const data = await response.json();
           eventData = data;
-          console.log(`✅ Successfully retrieved event details from ${endpoint}`);
+         
           break;
         }
       } catch (err) {
-        console.log(`Endpoint ${endpoint} failed, trying next...`);
+     
       }
     }
     

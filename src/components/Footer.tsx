@@ -4,7 +4,7 @@ import { Mail, MapPin, Facebook, Instagram, Youtube, Tag } from 'lucide-react';
 import Logo from '../assets/images/cicle-logo.png';
 import { useAuth } from '../context/AuthContext';
 import { useCategories } from '../context/CategoriesContext';
-import LeadCapture from './LeadCapture';
+
 
 const Footer: React.FC = () => {
   const { isLoggedIn } = useAuth();
@@ -66,14 +66,7 @@ const Footer: React.FC = () => {
 
   return (
     <footer className="bg-gray-800 text-white">
-      {/* Lead Capture Section */}
-      <LeadCapture 
-        onSubmit={handleLeadCaptureSubmit}
-        title="Need free 100 Practices for Speech sheets?"
-        description="If you treat children with speech sound disorders and are looking for a quick way to get 100 practices, you will LOVE this 25-page freebie! Get your copy now!"
-        buttonText="Let's go!"
-      />
-
+     
       {/* Main Footer */}
       <div className="py-12">
         <div className="container mx-auto px-4">

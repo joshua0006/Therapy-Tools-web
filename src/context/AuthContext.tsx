@@ -1,8 +1,9 @@
 import React, { createContext, useState, useContext, ReactNode, useEffect } from 'react';
-import { auth, loginWithEmail, registerWithEmail, logoutUser, updateUserMembership } from '../lib/firebase/auth';
+import { auth, loginWithEmail, registerWithEmail, logoutUser, updateUserMembership, checkSessionValidity } from '../lib/firebase/auth';
 import { onAuthStateChanged, User as FirebaseUser } from 'firebase/auth';
 import { saveUserProfile, getUserProfile, recordPurchase, getUserPurchases, saveBillingInformation, getUserBillingInformation, saveShippingInformation, getUserShippingInformation } from '../lib/firebase/firestore';
 import { toast } from 'react-hot-toast';
+import { calculateStackedEndDate, formatSubscriptionDuration } from '../utils/subscriptionUtils';
 
 // Add Purchase interface definition
 interface PurchaseItem {
@@ -56,6 +57,7 @@ export interface UserProfile {
     endDate: string;
     token?: string;
     billingCycle?: 'monthly' | 'yearly';
+    stackedCount?: number; // Number of times subscriptions have been stacked
   };
   purchases?: Purchase[];
   billingAddresses?: BillingAddress[];
@@ -78,6 +80,7 @@ export interface UserProfile {
     amount: number;
     expiryDate: string | null;
     transactionId: string;
+    isStacked?: boolean; // Whether this subscription was stacked on previous one
   }>;
   totalSubscriptionSpend?: number;
   phone?: string;
@@ -137,6 +140,7 @@ interface AuthContextType {
   ) => Promise<void>;
   logout: () => Promise<void>;
   loading: boolean;
+  sessionRestored: boolean;
   recordUserPurchase: (purchaseData: any) => Promise<any>;
   getUserPurchaseHistory: () => Promise<any[]>;
   updateMembership: (membershipData: any) => Promise<void>;
@@ -157,6 +161,13 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [user, setUser] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
+  const [sessionRestored, setSessionRestored] = useState(false);
+
+  // Check for existing session on initial load
+  useEffect(() => {
+    // Check if we have a valid session in localStorage
+    checkSessionValidity();
+  }, []);
 
   // Handle auth state changes
   useEffect(() => {
@@ -199,18 +210,24 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           
           setUser(userProfile as UserProfile);
           setIsLoggedIn(true);
+          
+          // If this was a session restore (not an initial login)
+          if (localStorage.getItem('userLoggedIn') === 'true' && !sessionRestored) {
+            setSessionRestored(true);
+          }
         } catch (error) {
           console.error('Error loading user profile:', error);
         }
       } else {
         setUser(null);
         setIsLoggedIn(false);
+        setSessionRestored(false);
       }
       setLoading(false);
     });
     
     return () => unsubscribe();
-  }, []);
+  }, [sessionRestored]);
 
   // Login function
   const login = async (email: string, password: string) => {
@@ -252,7 +269,11 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       // Set the test user directly
       setUser(testUser);
       setIsLoggedIn(true);
-      console.log('Test user logged in:', testUser);
+      
+      // Store session data in localStorage for test user
+      localStorage.setItem('userLoggedIn', 'true');
+      localStorage.setItem('lastAuthCheck', new Date().toISOString());
+      localStorage.setItem('userEmail', 'test@example.com');
     } catch (error) {
       console.error('Error with test login:', error);
     } finally {
@@ -316,25 +337,50 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   
   // New function to record a purchase
   const recordUserPurchase = async (purchaseData: any) => {
-    if (!user) throw new Error('User not authenticated');
+    if (!user) return;
     
-    try {
-      // Ensure purchaseData is properly structured
-      if (!purchaseData.items) purchaseData.items = [];
-      if (!purchaseData.status) purchaseData.status = 'completed';
-      if (!purchaseData.purchaseDate) purchaseData.purchaseDate = new Date().toISOString();
+    if (!purchaseData.purchaseDate) purchaseData.purchaseDate = new Date().toISOString();
+    
+    // Record the purchase in the database
+    const purchase = await recordPurchase(user.id, purchaseData);
+    
+    // Check if this is a subscription purchase
+    if (purchaseData.subscription && typeof purchaseData.subscription === 'object') {
+      // Generate expiration date based on billing cycle
+      const now = new Date();
+      let expirationDate;
+      let isStacked = false;
       
-      // Record the purchase in the database
-      const purchase = await recordPurchase(user.id, purchaseData);
+      // Get billing cycle with fallback to monthly
+      const billingCycle = purchaseData.subscription.billingCycle || 'monthly';
       
-      // Check if this is a subscription purchase
-      if (purchaseData.subscription && typeof purchaseData.subscription === 'object') {
-        // Generate expiration date based on billing cycle
-        const now = new Date();
-        const expirationDate = new Date(now);
+      // Check if there's an existing active subscription to stack onto
+      if (user.subscription && 
+          user.subscription.status === 'active' &&
+          new Date(user.subscription.endDate) > now) {
         
-        // Get billing cycle with fallback to monthly
-        const billingCycle = purchaseData.subscription.billingCycle || 'monthly';
+        // This is a stacked subscription
+        isStacked = true;
+        
+        // Calculate new end date by adding to the existing subscription end date
+        expirationDate = calculateStackedEndDate(
+          user.subscription.endDate,
+          billingCycle as 'monthly' | 'yearly'
+        );
+        
+        console.log(`Stacking subscription: Current end date: ${user.subscription.endDate}, New end date: ${expirationDate.toISOString()}`);
+        
+        // Calculate total subscription duration for a nice user message
+        const totalDuration = formatSubscriptionDuration(now, expirationDate);
+        
+        // Show stacking message
+        toast.success(
+          `Your new subscription has been stacked! Your membership is now valid for ${totalDuration}.`,
+          { duration: 5000 }
+        );
+      } else {
+        // No active subscription or expired subscription, calculate new date
+        expirationDate = new Date(now);
         
         if (billingCycle === 'yearly') {
           // Add 1 year to current date
@@ -344,68 +390,61 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           expirationDate.setMonth(now.getMonth() + 1);
         }
         
-        // Generate a unique token if not provided
-        const token = purchaseData.subscription.token || 
-          `sub_${purchaseData.subscription.plan}_${Date.now()}_${Math.random().toString(36).substring(2, 15)}`;
-        
-        // Extract price information
-        let subscriptionPrice = 0;
-        
-        // Try to get price from subscription object
-        if (purchaseData.subscription.price !== undefined) {
-          if (typeof purchaseData.subscription.price === 'string') {
-            const cleanPrice = purchaseData.subscription.price.replace(/[^0-9.-]+/g, '');
-            subscriptionPrice = parseFloat(cleanPrice);
-            if (isNaN(subscriptionPrice)) subscriptionPrice = 0;
-          } else if (typeof purchaseData.subscription.price === 'number') {
-            subscriptionPrice = purchaseData.subscription.price;
-          }
-        }
-        // If no price in subscription, try to get from total
-        else if (purchaseData.total) {
-          if (typeof purchaseData.total === 'string') {
-            const cleanTotal = purchaseData.total.replace(/[^0-9.-]+/g, '');
-            subscriptionPrice = parseFloat(cleanTotal);
-            if (isNaN(subscriptionPrice)) subscriptionPrice = 0;
-          } else if (typeof purchaseData.total === 'number') {
-            subscriptionPrice = purchaseData.total;
-          }
-        }
-        
-        // Update user membership with complete data
-        await updateMembership({
-          status: 'active',
-          plan: purchaseData.subscription.plan,
-          // Use provided end date or calculate one
-          endDate: purchaseData.subscription.endDate || expirationDate.toISOString(),
-          subscriptionToken: token,
-          billingCycle: billingCycle,
-          price: subscriptionPrice,
-          transactionId: purchaseData.transactionId || purchase.id
-        });
-        
-        console.log(`Subscription ${token} activated, expires: ${expirationDate.toLocaleDateString()}`);
-        
-        // Show success message to user
+        // Show standard message
         toast.success(`Your ${billingCycle} subscription has been activated!`);
       }
       
-      // Update local user state with new purchase
-      setUser(prevUser => {
-        if (!prevUser) return null;
-        
-        const purchases = prevUser.purchases || [];
-        return {
-          ...prevUser,
-          purchases: [...purchases, purchase]
-        };
+      // Generate a unique token if not provided
+      const token = purchaseData.subscription.token || 
+        `sub_${purchaseData.subscription.plan}_${Date.now()}_${Math.random().toString(36).substring(2, 15)}`;
+      
+      // Extract price information
+      let subscriptionPrice = 0;
+      
+      // Try to get price from subscription object
+      if (purchaseData.subscription.price !== undefined) {
+        if (typeof purchaseData.subscription.price === 'string') {
+          const cleanPrice = purchaseData.subscription.price.replace(/[^0-9.-]+/g, '');
+          subscriptionPrice = parseFloat(cleanPrice);
+          if (isNaN(subscriptionPrice)) subscriptionPrice = 0;
+        } else if (typeof purchaseData.subscription.price === 'number') {
+          subscriptionPrice = purchaseData.subscription.price;
+        }
+      }
+      // If no price in subscription, try to get from total
+      else if (purchaseData.total) {
+        if (typeof purchaseData.total === 'string') {
+          const cleanTotal = purchaseData.total.replace(/[^0-9.-]+/g, '');
+          subscriptionPrice = parseFloat(cleanTotal);
+          if (isNaN(subscriptionPrice)) subscriptionPrice = 0;
+        } else if (typeof purchaseData.total === 'number') {
+          subscriptionPrice = purchaseData.total;
+        }
+      }
+      
+      // Save the end date string for consistency
+      const endDateString = expirationDate.toISOString();
+      
+      // Update user membership with complete data
+      await updateMembership({
+        status: 'active',
+        plan: purchaseData.subscription.plan,
+        // Use the calculated end date with proper stacking
+        endDate: endDateString,
+        subscriptionToken: token,
+        billingCycle: billingCycle,
+        price: subscriptionPrice,
+        transactionId: purchaseData.transactionId || purchase.id,
+        isStacked: isStacked // Use the flag we set earlier
       });
       
-      return purchase;
-    } catch (error) {
-      console.error('Error recording purchase:', error);
-      throw error;
+      console.log(`Subscription ${token} activated, expires: ${expirationDate.toLocaleDateString()}`);
+    } else {
+      // Standard purchase without subscription
+      toast.success("Your purchase was successful!");
     }
+    
+    return purchase;
   };
   
   // Get user purchase history
@@ -549,6 +588,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         register,
         logout, 
         loading,
+        sessionRestored,
         recordUserPurchase,
         getUserPurchaseHistory,
         updateMembership,

@@ -132,15 +132,3 @@ exports.captureOrder = async (req, res) => {
  * 
  * @param {Object} captureData - The PayPal capture data
  */
-async function updateUserMembership(captureData) {
-  // In a real application, you would update the user's membership status in your database
-  // This is just a placeholder function
-  console.log(`Updating membership for order ${captureData.id}`);
-
-  // Example implementation:
-  // 1. Extract user ID from custom fields or payer information
-  // 2. Update user membership in database
-  // 3. Send confirmation email to user
-  
-  return true;
-} 

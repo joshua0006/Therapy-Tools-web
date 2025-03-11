@@ -7,7 +7,7 @@ export async function getProxiedPdfUrl(url: string): Promise<string> {
       throw new Error('No URL provided');
     }
 
-    console.log('Original PDF URL:', url);
+
 
     // If it's a WordPress URL, return it with cache buster
     if (url.includes('wp-content/uploads')) {
@@ -22,12 +22,11 @@ export async function getProxiedPdfUrl(url: string): Promise<string> {
           method: 'HEAD',
           mode: 'no-cors' 
         });
-        console.log('WordPress URL HEAD check response:', response);
-        
+      
         // If the response is OK, return the direct URL
         return directUrl.toString();
       } catch (error) {
-        console.error('Error accessing WordPress URL directly:', error);
+       
         
         // If we can't access the URL directly, try with a CORS proxy
         // This is a fallback approach and assumes the PDF is publicly accessible

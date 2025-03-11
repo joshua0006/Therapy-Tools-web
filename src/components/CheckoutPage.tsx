@@ -8,6 +8,7 @@ import { useCart, CartItem } from '../context/CartContext';
 import { useAuth, ShippingAddress } from '../context/AuthContext';
 import { toast } from 'react-hot-toast';
 import ShippingAddressCard from './ShippingAddressCard';
+import StripePayment from './StripePayment';
 
 interface CheckoutPageProps {
   productId?: string; // Optional product ID from URL
@@ -16,24 +17,14 @@ interface CheckoutPageProps {
 const CheckoutPage: React.FC<CheckoutPageProps> = ({ productId }) => {
   const navigate = useNavigate();
   const location = useLocation();
-  const { recordUserPurchase, isLoggedIn, user, saveShippingInfo, getShippingInfo } = useAuth();
+  const { recordUserPurchase, isLoggedIn, user, saveShippingInfo, getShippingInfo, isSubscriptionActive, getSubscriptionRemainingDays } = useAuth();
   const [paymentMethod, setPaymentMethod] = useState<'stripe'>('stripe');
   const [isProcessing, setIsProcessing] = useState(false);
-  const [paymentComplete, setPaymentComplete] = useState(false);
+  const [isPurchaseComplete, setIsPurchaseComplete] = useState(false);
   const [paymentError, setPaymentError] = useState<string | null>(null);
   const [paymentId, setPaymentId] = useState<string | null>(null);
   const [isCartLoaded, setIsCartLoaded] = useState(false);
   const [isLoading, setIsLoading] = useState<boolean>(false);
-  
-  // Card payment form state
-  const [cardNumber, setCardNumber] = useState('');
-  const [cardExpiry, setCardExpiry] = useState('');
-  const [cardCvc, setCardCvc] = useState('');
-  const [cardError, setCardError] = useState<{
-    number?: string;
-    expiry?: string;
-    cvc?: string;
-  }>({});
   
   // Contact information state
   const [contactInfo, setContactInfo] = useState({
@@ -46,6 +37,9 @@ const CheckoutPage: React.FC<CheckoutPageProps> = ({ productId }) => {
   // Add a new state for the "set as default" prompt
   const [showSetDefaultPrompt, setShowSetDefaultPrompt] = useState<boolean>(false);
   const [newAddressCompleted, setNewAddressCompleted] = useState<boolean>(false);
+
+  // Add a new state to track if we should highlight the terms checkbox
+  const [highlightTerms, setHighlightTerms] = useState(false);
 
   // Use the useAuth hook instead of direct context consumption
   const auth = useAuth();
@@ -163,8 +157,9 @@ const CheckoutPage: React.FC<CheckoutPageProps> = ({ productId }) => {
     };
   }, [planId, priceAmount, billingCycle]);
 
-  const handlePaymentMethodSelect = (method: 'stripe') => {
-    setPaymentMethod(method);
+  const handlePaymentMethodSelect = () => {
+    // Since we're only using Stripe now, simply set it as the payment method
+    setPaymentMethod('stripe');
     setPaymentError(null);
   };
 
@@ -185,7 +180,7 @@ const CheckoutPage: React.FC<CheckoutPageProps> = ({ productId }) => {
         // Create base purchase data object
         const purchaseData: any = {
           items: purchaseItems,
-          paymentMethod: paymentMethod,
+          paymentMethod: 'stripe', // Always use Stripe
           transactionId: transactionId || 'unknown',
           total: showCartItems ? getTotalPrice().toFixed(2) : (product.amount / 100).toFixed(2),
           purchaseDate: new Date().toISOString(),
@@ -218,7 +213,7 @@ const CheckoutPage: React.FC<CheckoutPageProps> = ({ productId }) => {
         }
         
         setPaymentId(transactionId || 'TEMP-' + Date.now());
-        setPaymentComplete(true);
+        setIsPurchaseComplete(true);
         
         // Instead of showing completion UI in place, redirect to thank you page
         navigate('/thankyou', { 
@@ -239,154 +234,6 @@ const CheckoutPage: React.FC<CheckoutPageProps> = ({ productId }) => {
     }
   };
 
-  // Format card number with spaces
-  const formatCardNumber = (value: string) => {
-    const v = value.replace(/\s+/g, '').replace(/[^0-9]/gi, '');
-    const matches = v.match(/\d{4,16}/g);
-    const match = matches && matches[0] || '';
-    const parts = [];
-
-    for (let i = 0, len = match.length; i < len; i += 4) {
-      parts.push(match.substring(i, i + 4));
-    }
-
-    if (parts.length) {
-      return parts.join(' ');
-    } else {
-      return value;
-    }
-  };
-
-  // Format card expiry as MM/YY
-  const formatCardExpiry = (value: string) => {
-    const v = value.replace(/\s+/g, '').replace(/[^0-9]/gi, '');
-    
-    if (v.length > 2) {
-      return `${v.substring(0, 2)}/${v.substring(2, 4)}`;
-    }
-    
-    return v;
-  };
-  
-  // Handle card form changes
-  const handleCardNumberChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const formattedValue = formatCardNumber(e.target.value);
-    setCardNumber(formattedValue);
-    
-    // Simple validation
-    if (formattedValue.replace(/\s+/g, '').length < 16) {
-      setCardError(prev => ({ ...prev, number: 'Card number must be 16 digits' }));
-    } else {
-      setCardError(prev => ({ ...prev, number: undefined }));
-    }
-  };
-  
-  const handleCardExpiryChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const formattedValue = formatCardExpiry(e.target.value);
-    setCardExpiry(formattedValue);
-    
-    // Simple validation
-    if (formattedValue.length < 5) {
-      setCardError(prev => ({ ...prev, expiry: 'Invalid expiry date' }));
-    } else {
-      setCardError(prev => ({ ...prev, expiry: undefined }));
-    }
-  };
-  
-  const handleCardCvcChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const value = e.target.value.replace(/[^0-9]/gi, '');
-    setCardCvc(value);
-    
-    // Simple validation
-    if (value.length < 3) {
-      setCardError(prev => ({ ...prev, cvc: 'CVC must be 3 digits' }));
-    } else {
-      setCardError(prev => ({ ...prev, cvc: undefined }));
-    }
-  };
-  
-  // Update validation to check for terms agreement
-  const validateCardForm = (): boolean => {
-    let isValid = true;
-    const errors: {
-      number?: string;
-      expiry?: string;
-      cvc?: string;
-    } = {};
-    
-    // Existing validation
-    if (!cardNumber || cardNumber.replace(/\s/g, '').length < 16) {
-      errors.number = 'Please enter a valid card number';
-      isValid = false;
-    }
-    
-    if (!cardExpiry || !cardExpiry.includes('/')) {
-      errors.expiry = 'Please enter a valid expiry date (MM/YY)';
-      isValid = false;
-    }
-    
-    if (!cardCvc || cardCvc.length < 3) {
-      errors.cvc = 'Please enter a valid CVC code';
-      isValid = false;
-    }
-    
-    if (!contactInfo.email) {
-      alert('Please enter your email address');
-      return false;
-    }
-    
-    if (!termsAgreed) {
-      alert('You must agree to the Terms of Use to complete your purchase');
-      return false;
-    }
-    
-    setCardError(errors);
-    return isValid;
-  };
-  
-  // Handle card payment submission
-  const handleCardPayment = () => {
-    // Clear any previous payment errors
-    setPaymentError(null);
-    
-    // Run full validation before processing payment
-    if (validateCardForm()) {
-      setIsProcessing(true);
-      
-      // In a real application, you would make a request to your payment processor here
-      // with both card details and shipping address
-      // For this demo, we'll simulate a successful payment after a short delay
-      setTimeout(() => {
-        const paymentData = {
-          cardNumber: cardNumber.replace(/\s/g, ''),
-          cardExpiry,
-          billingAddress: {
-            firstName: '',
-            lastName: '',
-            organization: '',
-            streetAddress: '',
-            city: '',
-            postcode: '',
-            country: '',
-            state: '',
-            phone: '',
-            phoneCountryCode: '+61',
-          }
-        };
-        
-        console.log('Payment data:', paymentData);
-        handlePaymentComplete(true, "card_" + Math.random().toString(36).substring(2, 15));
-      }, 1500);
-    } else {
-      // If validation fails, display a general error
-      if (!contactInfo.email || !termsAgreed) {
-        setPaymentError("Please complete all required fields and accept the terms of service.");
-      } else {
-        setPaymentError("Please check your card details and try again.");
-      }
-    }
-  };
-
   // Update the useEffect to use loadShippingInfo instead of loadBillingInfo
   // Also remove any references to loadShippingAddresses since we're consolidating
   useEffect(() => {
@@ -404,17 +251,29 @@ const CheckoutPage: React.FC<CheckoutPageProps> = ({ productId }) => {
 
   // Update handleContinueToPayment to simply validate the form without calling validateCardForm
   const validateCheckoutForm = (): boolean => {
-    // Don't call validateCardForm() here, just check basic conditions
-    return !!contactInfo.email && termsAgreed;
+    return contactInfo.email !== '' && termsAgreed;
   };
 
-  // Create a new function to check if the card data seems valid without updating state
+  // Add a new function to handle highlighting when payment is attempted
+  const highlightTermsIfNeeded = (): boolean => {
+    // Only highlight if terms aren't agreed to
+    if (!termsAgreed) {
+      setHighlightTerms(true);
+      
+      // Add a timeout to remove the highlight after a few seconds
+      setTimeout(() => {
+        setHighlightTerms(false);
+      }, 3000);
+      
+      return false; // Return false to indicate validation failed
+    }
+    
+    return true; // Return true to indicate validation passed
+  };
+
+  // Check if card data is valid - simplified since we're using Stripe component
   const isCardDataValid = (): boolean => {
-    return (
-      !!cardNumber && cardNumber.replace(/\s/g, '').length >= 16 &&
-      !!cardExpiry && cardExpiry.includes('/') &&
-      !!cardCvc && cardCvc.length >= 3
-    );
+    return true; // Validation is handled by the Stripe component
   };
 
   // Add a useEffect to preserve checkout parameters in local storage
@@ -476,6 +335,9 @@ const CheckoutPage: React.FC<CheckoutPageProps> = ({ productId }) => {
     }
   }, [auth?.isLoggedIn, navigate]);
 
+  // Add auth information to check for existing subscription
+  const hasActiveSubscription = isSubscriptionActive();
+
   return (
     <div className="bg-[#f8f9fa]">
       <Header />
@@ -516,7 +378,7 @@ const CheckoutPage: React.FC<CheckoutPageProps> = ({ productId }) => {
           </div>
         )}
         
-        {paymentComplete ? (
+        {isPurchaseComplete ? (
           // This will only show briefly before redirect
           <div className="max-w-md mx-auto bg-white p-8 rounded-lg shadow-sm">
             <div className="text-center">
@@ -569,12 +431,15 @@ const CheckoutPage: React.FC<CheckoutPageProps> = ({ productId }) => {
                     </svg>
                     About Your Subscription
                   </h3>
+                  
+              
+                  
                   <ul className="text-sm text-yellow-700 space-y-2">
                     <li className="flex items-start">
                       <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-1.5 text-yellow-600 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
                       </svg>
-                      <span>Your subscription will begin immediately after payment is processed</span>
+                      <span>Your subscription will begin {hasActiveSubscription ? 'extending your current membership' : 'immediately'} after payment is processed</span>
                     </li>
                     <li className="flex items-start">
                       <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-1.5 text-yellow-600 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -582,6 +447,14 @@ const CheckoutPage: React.FC<CheckoutPageProps> = ({ productId }) => {
                       </svg>
                       <span>You'll be billed {billingCycle === 'yearly' ? 'annually' : 'monthly'} until you cancel</span>
                     </li>
+                    {hasActiveSubscription && (
+                      <li className="flex items-start">
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-1.5 text-yellow-600 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
+                        <span>You can stack multiple subscriptions to extend your membership even further</span>
+                      </li>
+                    )}
                     <li className="flex items-start">
                       <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-1.5 text-yellow-600 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 11V7a4 4 0 118 0m-4 8v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2z" />
@@ -604,9 +477,7 @@ const CheckoutPage: React.FC<CheckoutPageProps> = ({ productId }) => {
                       <span className="text-xs text-gray-500">Secure payment via Stripe</span>
                     </div>
                     <div className="flex items-center space-x-1">
-                      <img src="https://cdn.jsdelivr.net/gh/stripe-samples/images@main/visa.svg" alt="Visa" className="h-6" />
-                      <img src="https://cdn.jsdelivr.net/gh/stripe-samples/images@main/mastercard.svg" alt="Mastercard" className="h-6" />
-                      <img src="https://cdn.jsdelivr.net/gh/stripe-samples/images@main/amex.svg" alt="Amex" className="h-6" />
+                      <img src="/images/payment-icons.png" alt="Visa" className="h-6" />
                     </div>
                   </div>
                   
@@ -617,49 +488,14 @@ const CheckoutPage: React.FC<CheckoutPageProps> = ({ productId }) => {
                   )}
                   
                   <div className="space-y-3">
-                    {/* Card Number Field */}
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Card Number</label>
-                      <div className="relative">
-                        <input
-                          type="text"
-                          placeholder="1234 5678 9012 3456"
-                          value={cardNumber}
-                          onChange={handleCardNumberChange}
-                          className={`w-full p-3 pr-10 border ${cardError.number ? 'border-red-500' : 'border-gray-300'} rounded-md focus:ring-1 focus:ring-[#2bcd82] focus:border-[#2bcd82] transition-colors`}
-                        />
-                        <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
-                          <CreditCard className="h-5 w-5 text-gray-400" />
-                        </div>
-                      </div>
-                      {cardError.number && <p className="mt-1 text-xs text-red-500">{cardError.number}</p>}
-                    </div>
-                    
-                    {/* Card Expiration and CVC Fields */}
-                    <div className="grid grid-cols-2 gap-4">
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Expiration Date</label>
-                        <input
-                          type="text"
-                          placeholder="MM/YY"
-                          value={cardExpiry}
-                          onChange={handleCardExpiryChange}
-                          className={`w-full p-3 border ${cardError.expiry ? 'border-red-500' : 'border-gray-300'} rounded-md focus:ring-1 focus:ring-[#2bcd82] focus:border-[#2bcd82] transition-colors`}
-                        />
-                        {cardError.expiry && <p className="mt-1 text-xs text-red-500">{cardError.expiry}</p>}
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">CVC</label>
-                        <input
-                          type="text"
-                          placeholder="123"
-                          value={cardCvc}
-                          onChange={handleCardCvcChange}
-                          className={`w-full p-3 border ${cardError.cvc ? 'border-red-500' : 'border-gray-300'} rounded-md focus:ring-1 focus:ring-[#2bcd82] focus:border-[#2bcd82] transition-colors`}
-                        />
-                        {cardError.cvc && <p className="mt-1 text-xs text-red-500">{cardError.cvc}</p>}
-                      </div>
-                    </div>
+                    {/* Use the StripePayment component instead of custom card fields */}
+                    <StripePayment 
+                      amount={paymentAmount}
+                      productName={product.name}
+                      onPaymentComplete={handlePaymentComplete}
+                      validateCheckout={validateCheckoutForm}
+                      highlightTermsIfNeeded={highlightTermsIfNeeded}
+                    />
                   </div>
                 </div>
                 
@@ -672,57 +508,26 @@ const CheckoutPage: React.FC<CheckoutPageProps> = ({ productId }) => {
                         name="terms"
                         type="checkbox"
                         checked={termsAgreed}
-                        onChange={() => setTermsAgreed(!termsAgreed)}
-                        className="h-4 w-4 text-[#2bcd82] focus:ring-[#2bcd82] border-gray-300 rounded"
+                        onChange={() => {
+                          setTermsAgreed(!termsAgreed);
+                          if (highlightTerms) setHighlightTerms(false);
+                        }}
+                        className={`h-4 w-4 ${highlightTerms 
+                          ? 'ring-2 ring-red-500 border-red-500 animate-pulse focus:ring-red-500 focus:border-red-500' 
+                          : 'text-[#2bcd82] focus:ring-[#2bcd82] border-gray-300'} rounded`}
                       />
                     </div>
                     <div className="ml-3 text-sm">
                       <label htmlFor="terms" className="font-medium text-gray-700">
-                        I agree to the <a href="/terms" className="text-[#2bcd82] hover:underline" target="_blank" rel="noopener noreferrer">Terms of Service</a>, <a href="/privacy" className="text-[#2bcd82] hover:underline" target="_blank" rel="noopener noreferrer">Privacy Policy</a>, and Subscription Terms
+                        I agree to the <a href="/terms-of-use" className="text-[#2bcd82] hover:underline" target="_blank" rel="noopener noreferrer">Terms of Service</a>, <a href="/privacy-policy" className="text-[#2bcd82] hover:underline" target="_blank" rel="noopener noreferrer">Privacy Policy</a>, and Subscription Terms
                       </label>
+                      {highlightTerms && (
+                        <p className="text-red-600 text-xs mt-1">
+                          Please agree to the terms before proceeding with payment
+                        </p>
+                      )}
                     </div>
                   </div>
-                </div>
-                
-                <div className="mt-6">
-                  <button
-                    type="button"
-                    className={`w-full py-3 px-4 flex justify-center items-center rounded-md ${
-                      !validateCheckoutForm() || !isCardDataValid() || isProcessing
-                        ? 'bg-gray-400 cursor-not-allowed'
-                        : 'bg-[#2bcd82] hover:bg-[#25b975]'
-                    } text-white font-medium transition-colors`}
-                    disabled={!validateCheckoutForm() || !isCardDataValid() || isProcessing}
-                    onClick={handleCardPayment}
-                  >
-                    {isProcessing ? (
-                      <span className="inline-flex items-center">
-                        <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                        </svg>
-                        Processing...
-                      </span>
-                    ) : (
-                      <>
-                        Complete Payment
-                        <span className="ml-1 text-white">
-                          {showCartItems 
-                            ? `($${getTotalPrice().toFixed(2)})` 
-                            : displayPrice 
-                              ? `(${displayPrice})` 
-                              : `($${(product.amount / 100).toFixed(2)}${product.billingCycle === 'monthly' ? '/monthly' : '/yearly'})`
-                          }
-                        </span>
-                      </>
-                    )}
-                  </button>
-                  <p className="mt-3 text-xs text-center text-gray-500">
-                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-3 h-3 inline mr-1">
-                      <path fillRule="evenodd" d="M12 1.5a5.25 5.25 0 00-5.25 5.25v3a3 3 0 00-3 3v6.75a3 3 0 003 3h10.5a3 3 0 003-3v-6.75a3 3 0 00-3-3v-3c0-2.9-2.35-5.25-5.25-5.25zm3.75 8.25v-3a3.75 3.75 0 10-7.5 0v3h7.5z" clipRule="evenodd" />
-                    </svg>
-                    Secured by 256-bit SSL encryption
-                  </p>
                 </div>
               </div>
               

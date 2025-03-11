@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { getFirestore, collection, query, where, getDocs, doc, getDoc, deleteDoc, updateDoc, setDoc } from 'firebase/firestore';
 import { toast } from 'react-hot-toast';
-import { Package, Filter, Search, XCircle, AlertCircle, Bookmark, RefreshCw, User, BookmarkMinus, ChevronDown, ChevronUp, CheckCircle, FileText, Trash, BookOpen, X, Eye, ArrowUpDown } from 'lucide-react';
+import { Package, Filter, Search, XCircle, AlertCircle, Bookmark, RefreshCw, User, BookmarkMinus, ChevronDown, ChevronUp, CheckCircle, FileText, Trash2, BookOpen, X, Eye, ArrowUpDown, Loader2, ChevronRight } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import Header from './Header';
 import Footer from './Footer';
@@ -92,6 +92,9 @@ const BookmarksPage: React.FC = () => {
   const [categoryFilter, setCategoryFilter] = useState<CategoryFilter>('all');
   const [categories, setCategories] = useState<string[]>([]);
   
+  // Add loading state for removal actions
+  const [removingBookmarks, setRemovingBookmarks] = useState<Record<string, boolean>>({});
+  
   // Load bookmarks data
   useEffect(() => {
     const loadBookmarks = async () => {
@@ -160,9 +163,13 @@ const BookmarksPage: React.FC = () => {
               const productSnap = await getDoc(productRef);
               
               if (productSnap.exists()) {
+                const productData = productSnap.data();
                 return {
                   id: item.id,
-                  details: { id: productSnap.id, ...productSnap.data() }
+                  details: { 
+                    id: productSnap.id, 
+                    ...productData 
+                  }
                 };
               }
             } catch (err) {
@@ -180,6 +187,7 @@ const BookmarksPage: React.FC = () => {
             }
           });
           
+          console.log('Loaded product details:', detailsMap);
           setProductDetails(detailsMap);
         } else {
           setBookmarks([]);
@@ -315,6 +323,12 @@ const BookmarksPage: React.FC = () => {
   const handleRemoveBookmark = async (itemId: string) => {
     if (!isLoggedIn || !user) return;
     
+    // Set loading state for this specific bookmark
+    setRemovingBookmarks(prev => ({
+      ...prev,
+      [itemId]: true
+    }));
+    
     try {
       const db = getFirestore();
       const bookmarksRef = doc(db, 'users', user.id, 'bookmarks', 'savedItems');
@@ -324,8 +338,10 @@ const BookmarksPage: React.FC = () => {
         const bookmarksData = bookmarksSnap.data() as BookmarksData;
         
         if (bookmarksData.items && Array.isArray(bookmarksData.items)) {
-          // Filter out the item to remove
-          const updatedItems = bookmarksData.items.filter(item => String(item.id) !== String(itemId));
+          // Use String conversion to ensure consistent comparison
+          const updatedItems = bookmarksData.items.filter(
+            (item) => String(item.id) !== String(itemId)
+          );
           
           // Update the document
           await setDoc(bookmarksRef, {
@@ -333,18 +349,26 @@ const BookmarksPage: React.FC = () => {
             updatedAt: new Date().toISOString()
           });
           
-          // Update local state
+          // Update local state - both main and filtered bookmarks
           setBookmarks(updatedItems);
-          toast.success('Bookmark removed successfully');
+          setFilteredBookmarks(prev => prev.filter(item => String(item.id) !== String(itemId)));
+          // Remove toast notification
         }
       }
     } catch (err) {
       console.error('Error removing bookmark:', err);
+      // Keep error notification
       toast.error('Failed to remove bookmark. Please try again.');
+    } finally {
+      // Reset loading state
+      setRemovingBookmarks(prev => ({
+        ...prev,
+        [itemId]: false
+      }));
     }
   };
   
-  // Handle PDF viewing
+  // Enhanced handleViewPdf function
   const handleViewPdf = async (itemId: string) => {
     if (!isLoggedIn || !user) {
       toast.error('Please log in to view this PDF');
@@ -356,15 +380,20 @@ const BookmarksPage: React.FC = () => {
       const productDetail = productDetails[itemId];
       
       if (!productDetail) {
-        toast.error('Product details not found');
+        console.log(`No product details found for item ID: ${itemId}`);
+        console.log('Available product details:', Object.keys(productDetails));
+        toast.error('Product details not found. Please try again later.');
         return;
       }
       
+      console.log(`Trying to view PDF for product: ${productDetail.name || productDetail.title || itemId}`);
+      
       // Check if it has a direct PDF URL
       if (productDetail.pdfUrl) {
+        console.log(`Found direct pdfUrl: ${productDetail.pdfUrl}`);
         setSelectedPdfDetails({
           url: productDetail.pdfUrl,
-          name: productDetail.name || 'PDF Document',
+          name: productDetail.name || productDetail.title || 'PDF Document',
           preventDownload: true,
           productId: String(itemId)
         });
@@ -373,15 +402,16 @@ const BookmarksPage: React.FC = () => {
       }
       
       // Check for PDF in downloads
-      if (productDetail.downloads && productDetail.downloads.length > 0) {
+      if (productDetail.downloads && Array.isArray(productDetail.downloads) && productDetail.downloads.length > 0) {
         const pdfDownloads = productDetail.downloads.filter(download => 
-          download.file && download.file.toLowerCase().endsWith('.pdf')
+          download.file && typeof download.file === 'string' && download.file.toLowerCase().endsWith('.pdf')
         );
         
         if (pdfDownloads.length > 0) {
+          console.log(`Found PDF in downloads: ${pdfDownloads[0].file}`);
           setSelectedPdfDetails({
             url: pdfDownloads[0].file,
-            name: pdfDownloads[0].name || productDetail.name || 'PDF Document',
+            name: pdfDownloads[0].name || productDetail.name || productDetail.title || 'PDF Document',
             preventDownload: true,
             productId: String(itemId)
           });
@@ -391,10 +421,11 @@ const BookmarksPage: React.FC = () => {
       }
       
       // Check fileUrl as a last resort
-      if (productDetail.fileUrl && productDetail.fileUrl.toLowerCase().endsWith('.pdf')) {
+      if (productDetail.fileUrl && typeof productDetail.fileUrl === 'string' && productDetail.fileUrl.toLowerCase().endsWith('.pdf')) {
+        console.log(`Found fileUrl: ${productDetail.fileUrl}`);
         setSelectedPdfDetails({
           url: productDetail.fileUrl,
-          name: productDetail.name || 'PDF Document',
+          name: productDetail.name || productDetail.title || 'PDF Document',
           preventDownload: true,
           productId: String(itemId)
         });
@@ -402,7 +433,17 @@ const BookmarksPage: React.FC = () => {
         return;
       }
       
-      toast.error('No PDF found for this item');
+      // If we have a bookmark item with hasPdf but couldn't find the PDF, navigate to the detail page
+      const bookmarkItem = bookmarks.find(item => String(item.id) === String(itemId));
+      if (bookmarkItem && bookmarkItem.hasPdf) {
+        console.log('Bookmark indicates PDF exists but could not be located directly. Navigating to detail page.');
+        navigate(`/catalog/${itemId}`);
+        return;
+      }
+      
+      console.log('No PDF found for this item:', productDetail);
+      toast.error('No PDF found for this item. Opening detail page instead.');
+      navigate(`/catalog/${itemId}`);
     } catch (err) {
       console.error('Error viewing PDF:', err);
       toast.error('Failed to load PDF. Please try again.');
@@ -492,9 +533,9 @@ const BookmarksPage: React.FC = () => {
         
         {/* Loading State */}
         {loading && (
-          <div className="bg-white rounded-lg shadow-sm p-10 text-center">
-            <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500 mx-auto mb-4"></div>
-            <p className="text-gray-600 font-medium">Loading your bookmarks...</p>
+          <div className="flex flex-col items-center justify-center py-12">
+            <Loader2 className="w-10 h-10 text-[#2bcd82] animate-spin mb-4" />
+            <p className="text-gray-600">Loading your bookmarks...</p>
           </div>
         )}
         
@@ -628,21 +669,43 @@ const BookmarksPage: React.FC = () => {
                     <FileText className="w-5 h-5" />
                   </button>
                   
-                  <button 
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleRemoveBookmark(String(item.id));
-                    }}
-                    className="bg-red-600 text-white p-3 rounded-full hover:bg-red-700 transition-colors duration-200"
+                  <Button
+                    onClick={() => handleRemoveBookmark(item.id.toString())}
+                    className="text-red-500 hover:text-red-700 p-2 rounded-full hover:bg-red-50 transition-colors"
+                    disabled={removingBookmarks[item.id.toString()]}
                   >
-                    <BookmarkMinus className="w-5 h-5" />
-                  </button>
+                    {removingBookmarks[item.id.toString()] ? (
+                      <Loader2 className="w-5 h-5 animate-spin" />
+                    ) : (
+                      <Trash2 className="w-5 h-5" />
+                    )}
+                  </Button>
                 </div>
                 
                 {/* "Read Now" ribbon - appears on hover */}
-                <div className="absolute bottom-4 left-0 right-0 mx-auto w-32 text-center opacity-0 group-hover:opacity-100 transition-all duration-300 transform group-hover:-translate-y-2">
-                  <div className="bg-[#2bcd82] text-white py-1 px-4 rounded-md shadow-md font-medium text-sm">
-                    Read Now
+                <div 
+                  className="absolute bottom-4 left-0 right-0 mx-auto w-32 text-center opacity-0 group-hover:opacity-100 transition-all duration-300 transform group-hover:-translate-y-2"
+                  onClick={(e) => {
+                    e.stopPropagation(); // Prevent navigation to product page
+                    
+                    if (item.hasPdf) {
+                      handleViewPdf(String(item.id));
+                    } else {
+                      // If no PDF, navigate directly to the detail page
+                      navigate(`/catalog/${item.id}`);
+                    }
+                  }}
+                >
+                  <div className="bg-[#2bcd82] text-white py-1 px-4 rounded-md shadow-md font-medium text-sm hover:bg-[#25b975] cursor-pointer flex items-center justify-center">
+                    {item.hasPdf ? (
+                      <>
+                        <FileText className="w-4 h-4 mr-1" /> View PDF
+                      </>
+                    ) : (
+                      <>
+                        <ChevronRight className="w-4 h-4" /> Read More
+                      </>
+                    )}
                   </div>
                 </div>
               </div>

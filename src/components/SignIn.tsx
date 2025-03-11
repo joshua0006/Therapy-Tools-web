@@ -8,20 +8,24 @@ const SignIn: React.FC = () => {
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [pageReady, setPageReady] = useState(false);
   const navigate = useNavigate();
   const location = useLocation();
-  const { isLoggedIn, login, testLogin } = useAuth();
+  const { isLoggedIn, login, testLogin, loading: authLoading } = useAuth();
   
-  // Extract any redirect information from location state
-  const redirectUrl = location.state?.redirectUrl || '/';
-  const redirectMessage = location.state?.message;
-
-  // Redirect if already logged in
+  // Wait for auth to be checked before showing content
+  useEffect(() => {
+    if (!authLoading) {
+      setPageReady(true);
+    }
+  }, [authLoading]);
+  
+  // Always redirect to home page after login
   useEffect(() => {
     if (isLoggedIn) {
-      navigate(redirectUrl);
+      navigate('/');
     }
-  }, [isLoggedIn, navigate, redirectUrl]);
+  }, [isLoggedIn, navigate]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -30,7 +34,7 @@ const SignIn: React.FC = () => {
 
     try {
       await login(email, password);
-      navigate(redirectUrl);
+      // Will redirect to home page via the useEffect above
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An error occurred');
     } finally {
@@ -43,7 +47,7 @@ const SignIn: React.FC = () => {
     
     try {
       await testLogin();
-      navigate(redirectUrl);
+      // Will redirect to home page via the useEffect above
     } catch (err) {
       setError('Error with test sign in');
     } finally {
@@ -51,13 +55,22 @@ const SignIn: React.FC = () => {
     }
   };
 
+  // Show loading spinner while auth is being checked
+  if (!pageReady) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="w-12 h-12 border-4 border-t-transparent border-[#2bcd82] rounded-full animate-spin"></div>
+      </div>
+    );
+  }
+
   return (
-    <div className="max-w-md mx-auto my-12 p-8 bg-white rounded-xl shadow-lg">
-      <h2 className="text-3xl font-bold text-center mb-4">Log In</h2>
+    <div className="max-w-md mx-auto my-12 px-4 sm:px-6 md:px-8 py-8 bg-white rounded-xl shadow-lg">
+      <h2 className="text-3xl font-bold text-center mb-6">Log In</h2>
       
-      {redirectMessage && (
+      {location.state?.message && (
         <div className="bg-blue-50 text-blue-800 p-3 rounded-md mb-6 text-center text-sm">
-          {redirectMessage}
+          {location.state.message}
         </div>
       )}
 
@@ -110,11 +123,11 @@ const SignIn: React.FC = () => {
           </div>
         </div>
 
-        <div className="mt-6 flex flex-col space-y-4">
+        <div className="flex flex-col space-y-4">
           <button
             type="submit"
             disabled={loading}
-            className="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-[#2bcd82] hover:bg-[#25b975] focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[#2bcd82] disabled:opacity-50 disabled:cursor-not-allowed"
+            className="w-full flex justify-center items-center py-3 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-[#2bcd82] hover:bg-[#25b975] focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[#2bcd82] disabled:opacity-50 disabled:cursor-not-allowed transition-colors duration-200"
           >
             {loading ? <Loader2 className="h-5 w-5 animate-spin mr-2" /> : null}
             Sign In
@@ -123,7 +136,7 @@ const SignIn: React.FC = () => {
           <button
             type="button"
             onClick={handleTestSignIn}
-            className="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+            className="w-full flex justify-center items-center py-3 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors duration-200"
           >
             <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" />
@@ -133,8 +146,8 @@ const SignIn: React.FC = () => {
         </div>
       </form>
 
-      <div className="mt-6 text-center">
-        <Link to="/signup" className="text-sm text-[#2bcd82] hover:text-[#25b975] font-medium">
+      <div className="mt-8 text-center">
+        <Link to="/signup" className="text-sm text-[#2bcd82] hover:text-[#25b975] font-medium transition-colors duration-200">
           Don't have an account? Sign up
         </Link>
       </div>

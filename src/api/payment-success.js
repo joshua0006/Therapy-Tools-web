@@ -177,15 +177,3 @@ async function verifyPayPalPayment(orderId) {
  * @param {string} productId - The ID of the product purchased
  * @returns {Promise<boolean>} Success status
  */
-async function activateMembership(customerId, productId) {
-  // In a real application, this would update the user's membership in your database
-  // This is just a placeholder function
-  console.log(`Activating membership for customer ${customerId}, product ${productId}`);
-  
-  // Example implementation:
-  // 1. Lookup user by customer ID
-  // 2. Update their membership status and expiration date
-  // 3. Send confirmation email
-  
-  return true;
-} 

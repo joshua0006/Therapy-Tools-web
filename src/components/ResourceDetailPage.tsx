@@ -1,12 +1,12 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, ShoppingCart, Check, Star, Loader, Clock, BookOpen, Users, AlertCircle, FileText, LockIcon, Info, CheckCircle, Tag, X, Bookmark, BookmarkPlus } from 'lucide-react';
+import { ArrowLeft, ShoppingCart, Check, Star, Loader, Clock, BookOpen, Users, AlertCircle, FileText, LockIcon, Info, CheckCircle, Tag, X, Bookmark, BookmarkPlus, Loader2 } from 'lucide-react';
 import Header from './Header';
 import Footer from './Footer';
 import Button from './Button';
 import { useAuth } from '../context/AuthContext';
 import { toast } from 'react-hot-toast';
-import { getFirestore, doc, getDoc, collection, query, where, getDocs, setDoc, arrayUnion } from 'firebase/firestore';
+import { getFirestore, doc, getDoc, collection, query, where, getDocs, setDoc, arrayUnion, updateDoc } from 'firebase/firestore';
 import { app } from '../lib/firebase';
 import SecurePdfViewer from './SecurePdfViewer';
 
@@ -140,8 +140,10 @@ const ResourceDetailPage: React.FC = () => {
   
   const { user, isLoggedIn, getUserPurchaseHistory, isSubscriptionActive, getSubscriptionRemainingDays } = useAuth();
   
-  // Add a new state for bookmark status
+  // Add states for bookmark functionality
   const [isBookmarked, setIsBookmarked] = useState(false);
+  const [bookmarkLoading, setBookmarkLoading] = useState(false);
+  const [bookmarkCheckLoading, setBookmarkCheckLoading] = useState(true);
   
   // Create Firestore instance directly
   const db = getFirestore(app);
@@ -414,10 +416,15 @@ const ResourceDetailPage: React.FC = () => {
     }
   }, [product]);
   
-  // Add useEffect to check if this product is already bookmarked
+  // Update useEffect to check if this product is already bookmarked
   useEffect(() => {
     const checkBookmarkStatus = async () => {
-      if (!isLoggedIn || !user || !resourceId) return;
+      if (!isLoggedIn || !user || !resourceId) {
+        setBookmarkCheckLoading(false);
+        return;
+      }
+      
+      setBookmarkCheckLoading(true);
       
       try {
         const db = getFirestore();
@@ -427,29 +434,42 @@ const ResourceDetailPage: React.FC = () => {
         if (bookmarksSnap.exists()) {
           const bookmarksData = bookmarksSnap.data();
           if (bookmarksData.items && Array.isArray(bookmarksData.items)) {
+            // Use String to ensure consistent comparison (some IDs might be numbers)
             const isAlreadyBookmarked = bookmarksData.items.some(
-              (item: any) => item.id === resourceId
+              (item: any) => String(item.id) === String(resourceId)
             );
             setIsBookmarked(isAlreadyBookmarked);
+            console.log(`Bookmark status for ${resourceId}: ${isAlreadyBookmarked ? 'Bookmarked' : 'Not bookmarked'}`);
           }
+        } else {
+          // If no bookmarks document exists, item is not bookmarked
+          setIsBookmarked(false);
         }
       } catch (err) {
         console.error('Error checking bookmark status:', err);
+        setIsBookmarked(false);
+      } finally {
+        setBookmarkCheckLoading(false);
       }
     };
     
+    // Run the check whenever resourceId, user, or login state changes
     checkBookmarkStatus();
   }, [isLoggedIn, user, resourceId]);
   
-  // Replace handleAddToCart with handleAddToBookmarks
+  // Update handleAddToBookmarks with loading state
   const handleAddToBookmarks = async () => {
     if (!isLoggedIn || !user) {
+      // Keep error toast for login requirement
       toast.error('Please log in to bookmark this item');
       navigate('/signin');
       return;
     }
     
     if (!product) return;
+    
+    // Set loading state
+    setBookmarkLoading(true);
     
     try {
       const db = getFirestore();
@@ -489,6 +509,9 @@ const ResourceDetailPage: React.FC = () => {
           items: [bookmarkItem],
           updatedAt: new Date().toISOString()
         });
+        
+        setIsBookmarked(true);
+        // Remove toast notification
       } else {
         // Update the existing bookmarks document
         const existingData = bookmarksSnap.data();
@@ -496,12 +519,14 @@ const ResourceDetailPage: React.FC = () => {
         // Check if already bookmarked to avoid duplicates
         if (existingData.items && Array.isArray(existingData.items)) {
           const isAlreadyBookmarked = existingData.items.some(
-            (item: any) => item.id === product.id
+            (item: any) => String(item.id) === String(product.id)
           );
           
           if (isAlreadyBookmarked) {
             // Already bookmarked, so we'll remove it (toggle behavior)
-            const updatedItems = existingData.items.filter((item: any) => item.id !== product.id);
+            const updatedItems = existingData.items.filter(
+              (item: any) => String(item.id) !== String(product.id)
+            );
             
             await setDoc(bookmarksRef, {
               items: updatedItems,
@@ -509,23 +534,35 @@ const ResourceDetailPage: React.FC = () => {
             });
             
             setIsBookmarked(false);
-            toast.success(`${product.name || product.title || 'Product'} removed from bookmarks`);
-            return;
+            // Remove toast notification
+          } else {
+            // Add to bookmarks
+            await updateDoc(bookmarksRef, {
+              items: arrayUnion(bookmarkItem),
+              updatedAt: new Date().toISOString()
+            });
+            
+            setIsBookmarked(true);
+            // Remove toast notification
           }
+        } else {
+          // No items array or not an array, create a new one
+          await setDoc(bookmarksRef, {
+            items: [bookmarkItem],
+            updatedAt: new Date().toISOString()
+          });
+          
+          setIsBookmarked(true);
+          // Remove toast notification
         }
-        
-        // Add to bookmarks
-        await setDoc(bookmarksRef, {
-          items: arrayUnion(bookmarkItem),
-          updatedAt: new Date().toISOString()
-        }, { merge: true });
       }
-      
-      setIsBookmarked(true);
-      toast.success(`${product.name || product.title || 'Product'} added to bookmarks!`);
     } catch (err) {
-      console.error('Error adding to bookmarks:', err);
-      toast.error('Failed to add to bookmarks. Please try again.');
+      console.error('Error updating bookmark:', err);
+      // Keep error toast
+      toast.error('Failed to update bookmark. Please try again.');
+    } finally {
+      // Reset loading state
+      setBookmarkLoading(false);
     }
   };
   
@@ -781,15 +818,40 @@ const ResourceDetailPage: React.FC = () => {
               <div className="flex flex-col space-y-4 mt-auto">
                 <Button 
                   onClick={handleAddToBookmarks}
+                  disabled={bookmarkLoading || bookmarkCheckLoading}
                   className={`flex items-center justify-center py-3 rounded-lg transition-colors ${
-                    isBookmarked 
-                      ? 'bg-blue-100 text-blue-700 hover:bg-blue-200 border border-blue-300' 
-                      : 'bg-[#2bcd82] hover:bg-[#25b975] text-white'
+                    bookmarkCheckLoading
+                      ? 'bg-gray-100 text-gray-500'
+                      : isBookmarked 
+                        ? 'bg-blue-100 text-blue-700 hover:bg-blue-200 border border-blue-300' 
+                        : 'bg-[#2bcd82] hover:bg-[#25b975] text-white'
                   }`}
                 >
-                  {isBookmarked ? (
+                  {bookmarkLoading ? (
                     <>
-                      <Bookmark className="w-5 h-5 mr-2" /> Bookmarked
+                      <Loader2 className="w-5 h-5 mr-2 animate-spin" /> {isBookmarked ? 'Removing...' : 'Adding...'}
+                    </>
+                  ) : bookmarkCheckLoading ? (
+                    <>
+                      <Loader2 className="w-5 h-5 mr-2 animate-spin" /> Checking...
+                    </>
+                  ) : isBookmarked ? (
+                    <>
+                      <svg 
+                        xmlns="http://www.w3.org/2000/svg" 
+                        width="20" 
+                        height="20" 
+                        viewBox="0 0 24 24" 
+                        fill="#1d4ed8" 
+                        stroke="#1d4ed8" 
+                        strokeWidth="2" 
+                        strokeLinecap="round" 
+                        strokeLinejoin="round" 
+                        className="mr-2"
+                      >
+                        <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"></path>
+                      </svg>
+                      Bookmarked
                     </>
                   ) : (
                     <>
@@ -816,7 +878,16 @@ const ResourceDetailPage: React.FC = () => {
                         <p className="text-sm text-gray-500 text-center">
                           {isLoggedIn ? 
                             "Active subscription required to access PDF content" : 
-                            "Login and subscribe to access PDF content"}
+                            <span 
+                              className="text-blue-500 hover:text-blue-700 hover:underline cursor-pointer transition-colors flex items-center justify-center gap-1"
+                              onClick={() => navigate('/signin')}
+                            >
+                              Login and subscribe to access PDF content
+                              <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 16l-4-4m0 0l4-4m-4 4h14" />
+                              </svg>
+                            </span>
+                          }
                         </p>
                       </div>
                     )}

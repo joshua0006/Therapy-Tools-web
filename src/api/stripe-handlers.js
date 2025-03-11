@@ -60,12 +60,12 @@ exports.handleWebhookEvent = async (req, res) => {
     switch (event.type) {
       case 'payment_intent.succeeded':
         const paymentIntent = event.data.object;
-        console.log(`Payment for ${paymentIntent.amount} succeeded`);
+       
         // Update user membership or deliver digital product here
         await updateUserMembership(paymentIntent);
         break;
       case 'payment_intent.payment_failed':
-        console.log('Payment failed');
+      
         // Handle failed payment here
         break;
       default:

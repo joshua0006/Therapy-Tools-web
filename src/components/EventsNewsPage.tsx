@@ -511,71 +511,80 @@ const EventsNewsPage: React.FC = () => {
                       <div 
                         key={`${item.type}-${item.id}`}
                         id={item.type === 'event' ? `event-${item.id}` : `news-${item.id}`}
-                        className="bg-white rounded-lg shadow-md overflow-hidden border border-gray-100"
+                        className="bg-white rounded-lg shadow-md overflow-hidden border border-gray-100 transition-all duration-200 hover:shadow-lg"
                         onClick={item.type === 'event' ? () => handleEventSelect(item.id) : undefined}
                         style={{ cursor: item.type === 'event' ? 'pointer' : 'default' }}
                       >
-                        <div className="md:flex h-full">
-                          <div className="md:w-1/4 h-36 md:h-auto max-w-[220px]">
+                        <div className="flex flex-col md:flex-row h-full">
+                          {/* Image container - fixed height on mobile, proportional on desktop */}
+                          <div className="w-full md:w-1/4 h-48 md:h-auto relative min-w-[200px]">
                             <img 
                               src={item.image} 
                               alt={item.title} 
-                              className="w-full h-full object-cover"
+                              className="w-full h-full object-cover absolute inset-0"
                             />
                           </div>
-                          <div className="p-6 md:w-3/4 flex flex-col h-full relative">
-                            <div className="flex justify-between items-start mb-2">
-                              <span className={`px-3 py-1 rounded-full text-xs font-medium ${
-                                item.type === 'event' 
-                                  ? 'bg-[#2bcd82]/10 text-[#2bcd82]' 
-                                  : 'bg-[#fb6a69]/10 text-[#fb6a69]'
-                              }`}>
-                                {item.type === 'event' ? 'Event' : 'News'}
-                              </span>
-                              <span className="text-gray-500 text-sm">{formatDate(item.date, 'medium')}</span>
+                          
+                          {/* Content container - flexible height with proper spacing */}
+                          <div className="p-5 md:p-6 w-full md:w-3/4 flex flex-col justify-between">
+                            <div className="flex flex-col h-full">
+                              <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-2 mb-3">
+                                <span className={`px-3 py-1 rounded-full text-xs font-medium inline-block ${
+                                  item.type === 'event' 
+                                    ? 'bg-[#2bcd82]/10 text-[#2bcd82]' 
+                                    : 'bg-[#fb6a69]/10 text-[#fb6a69]'
+                                }`}>
+                                  {item.type === 'event' ? 'Event' : 'News'}
+                                </span>
+                                <span className="text-gray-500 text-sm">{formatDate(item.date, 'medium')}</span>
+                              </div>
+                              
+                              <h2 className="text-xl md:text-2xl font-bold text-gray-800 mb-2 line-clamp-2">{item.title}</h2>
+                              
+                              {item.type === 'event' ? (
+                                <>
+                                  <div className="flex items-center text-gray-600 mb-1">
+                                    <Clock className="w-4 h-4 mr-2 flex-shrink-0" />
+                                    <span className="truncate">{item.time}</span>
+                                  </div>
+                                  <div className="flex items-center text-gray-600 mb-4">
+                                    <MapPin className="w-4 h-4 mr-2 flex-shrink-0" />
+                                    <span className="truncate">{item.location}</span>
+                                  </div>
+                                  <p className="text-gray-600 mb-4 line-clamp-3">{item.description}</p>
+                                  <div className="mt-auto pt-2">
+                                    <button 
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        handleEventSelect(item.id);
+                                      }}
+                                      className="inline-flex items-center bg-[#2bcd82] text-white hover:bg-[#25b975] font-medium py-2 px-4 rounded transition-colors"
+                                    >
+                                      View Details
+                                    </button>
+                                  </div>
+                                </>
+                              ) : (
+                                <>
+                                  <div className="flex items-center text-gray-600 mb-4">
+                                    <User className="w-4 h-4 mr-2 flex-shrink-0" />
+                                    <span className="font-medium truncate">{item.author}</span>
+                                  </div>
+                                  <p className="text-gray-600 mb-4 line-clamp-3">{item.summary}</p>
+                                  <div className="mt-auto pt-2">
+                                    <a 
+                                      href={item.readMoreLink} 
+                                      target="_blank" 
+                                      rel="noopener noreferrer"
+                                      onClick={(e) => e.stopPropagation()}
+                                      className="inline-flex items-center bg-[#fb6a69] text-white hover:bg-[#f5514f] font-medium py-2 px-4 rounded transition-colors"
+                                    >
+                                      Read Full Article <ExternalLink className="w-4 h-4 ml-1" />
+                                    </a>
+                                  </div>
+                                </>
+                              )}
                             </div>
-                            <h2 className="text-2xl font-bold text-gray-800 mb-2">{item.title}</h2>
-                            {item.type === 'event' ? (
-                              <>
-                                <div className="flex items-center text-gray-600 mb-1">
-                                  <Clock className="w-4 h-4 mr-2" />
-                                  <span>{item.time}</span>
-                                </div>
-                                <div className="flex items-center text-gray-600 mb-4">
-                                  <MapPin className="w-4 h-4 mr-2" />
-                                  <span>{item.location}</span>
-                                </div>
-                                <p className="text-gray-600 mb-4 line-clamp-2">{item.description}</p>
-                                <div className="mt-auto flex justify-end">
-                                  <button 
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      handleEventSelect(item.id);
-                                    }}
-                                    className="inline-flex items-center bg-[#2bcd82] text-white hover:bg-[#25b975] font-medium py-2 px-4 rounded"
-                                  >
-                                    View Details
-                                  </button>
-                                </div>
-                              </>
-                            ) : (
-                              <>
-                                <div className="flex items-center text-gray-600 mb-4">
-                                  <span className="font-medium">By: {item.author}</span>
-                                </div>
-                                <p className="text-gray-600 mb-4 line-clamp-2">{item.summary}</p>
-                                <div className="mt-auto flex justify-end">
-                                  <a 
-                                    href={item.readMoreLink} 
-                                    target="_blank" 
-                                    rel="noopener noreferrer"
-                                    className="inline-flex items-center bg-[#fb6a69] text-white hover:bg-[#f5514f] font-medium py-2 px-4 rounded"
-                                  >
-                                    Read Full Article <ExternalLink className="w-4 h-4 ml-1" />
-                                  </a>
-                                </div>
-                              </>
-                            )}
                           </div>
                         </div>
                       </div>
@@ -598,44 +607,48 @@ const EventsNewsPage: React.FC = () => {
                           <div 
                             key={event.id} 
                             id={`event-${event.id}`}
-                            className="bg-white rounded-lg shadow-md overflow-hidden border border-gray-100 cursor-pointer"
+                            className="bg-white rounded-lg shadow-md overflow-hidden border border-gray-100 cursor-pointer transition-all duration-200 hover:shadow-lg"
                             onClick={() => handleEventSelect(event.id)}
                           >
-                            <div className="md:flex h-full">
-                              <div className="md:w-1/4 h-36 md:h-auto max-w-[220px]">
+                            <div className="flex flex-col md:flex-row h-full">
+                              {/* Image container - fixed height on mobile, proportional on desktop */}
+                              <div className="w-full md:w-1/4 h-48 md:h-auto relative min-w-[200px]">
                                 <img 
                                   src={event.image} 
                                   alt={event.title} 
-                                  className="w-full h-full object-cover"
+                                  className="w-full h-full object-cover absolute inset-0"
                                 />
                               </div>
-                              <div className="p-6 md:w-3/4 flex flex-col h-full relative">
-                                <div className="flex justify-between items-start mb-2">
-                                  <span className="px-3 py-1 rounded-full text-xs font-medium bg-[#2bcd82]/10 text-[#2bcd82]">
-                                    Event
-                                  </span>
-                                  <span className="text-gray-500 text-sm">{formatDate(event.date, 'medium')}</span>
-                                </div>
-                                <h2 className="text-2xl font-bold text-gray-800 mb-2">{event.title}</h2>
-                                <div className="flex items-center text-gray-600 mb-1">
-                                  <Clock className="w-4 h-4 mr-2" />
-                                  <span>{event.time}</span>
-                                </div>
-                                <div className="flex items-center text-gray-600 mb-4">
-                                  <MapPin className="w-4 h-4 mr-2" />
-                                  <span>{event.location}</span>
-                                </div>
-                                <p className="text-gray-600 mb-4 line-clamp-2">{event.description}</p>
-                                <div className="mt-auto flex justify-end">
-                                  <button 
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      handleEventSelect(event.id);
-                                    }}
-                                    className="inline-flex items-center bg-[#2bcd82] text-white hover:bg-[#25b975] font-medium py-2 px-4 rounded"
-                                  >
-                                    View Details
-                                  </button>
+                              
+                              {/* Content container - flexible height with proper spacing */}
+                              <div className="p-5 md:p-6 w-full md:w-3/4 flex flex-col justify-between">
+                                <div className="flex flex-col h-full">
+                                  <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-2 mb-3">
+                                    <span className="px-3 py-1 rounded-full text-xs font-medium inline-block bg-[#2bcd82]/10 text-[#2bcd82]">
+                                      Event
+                                    </span>
+                                    <span className="text-gray-500 text-sm">{formatDate(event.date, 'medium')}</span>
+                                  </div>
+                                  
+                                  <h2 className="text-xl md:text-2xl font-bold text-gray-800 mb-2 line-clamp-2">{event.title}</h2>
+                                  
+                                  <div className="flex items-center text-gray-600 mb-1">
+                                    <Clock className="w-4 h-4 mr-2 flex-shrink-0" />
+                                    <span className="truncate">{event.time}</span>
+                                  </div>
+                                  <div className="flex items-center text-gray-600 mb-4">
+                                    <MapPin className="w-4 h-4 mr-2 flex-shrink-0" />
+                                    <span className="truncate">{event.location}</span>
+                                  </div>
+                                  <p className="text-gray-600 mb-4 line-clamp-3">{event.description}</p>
+                                  
+                                  <div className="mt-auto pt-2">
+                                    <button 
+                                      className="inline-flex items-center bg-[#2bcd82] text-white hover:bg-[#25b975] font-medium py-2 px-4 rounded transition-colors"
+                                    >
+                                      View Details
+                                    </button>
+                                  </div>
                                 </div>
                               </div>
                             </div>
@@ -663,37 +676,47 @@ const EventsNewsPage: React.FC = () => {
                           <div 
                             key={newsItem.id}
                             id={`news-${newsItem.id}`}
-                            className="bg-white rounded-lg shadow-md overflow-hidden border border-gray-100"
+                            className="bg-white rounded-lg shadow-md overflow-hidden border border-gray-100 transition-all duration-200 hover:shadow-lg"
                           >
-                            <div className="md:flex h-full">
-                              <div className="md:w-1/4 h-36 md:h-auto max-w-[220px]">
+                            <div className="flex flex-col md:flex-row h-full">
+                              {/* Image container - fixed height on mobile, proportional on desktop */}
+                              <div className="w-full md:w-1/4 h-48 md:h-auto relative min-w-[200px]">
                                 <img 
                                   src={newsItem.image} 
                                   alt={newsItem.title} 
-                                  className="w-full h-full object-cover"
+                                  className="w-full h-full object-cover absolute inset-0"
                                 />
                               </div>
-                              <div className="p-6 md:w-3/4 flex flex-col h-full relative">
-                                <div className="flex justify-between items-start mb-2">
-                                  <span className="px-3 py-1 rounded-full text-xs font-medium bg-[#fb6a69]/10 text-[#fb6a69]">
-                                    News
-                                  </span>
-                                  <span className="text-gray-500 text-sm">{formatDate(newsItem.date, 'medium')}</span>
-                                </div>
-                                <h2 className="text-2xl font-bold text-gray-800 mb-2">{newsItem.title}</h2>
-                                <div className="flex items-center text-gray-600 mb-4">
-                                  <span className="font-medium">By: {newsItem.author}</span>
-                                </div>
-                                <p className="text-gray-600 mb-4 line-clamp-2">{newsItem.summary}</p>
-                                <div className="mt-auto flex justify-end">
-                                  <a 
-                                    href={newsItem.readMoreLink} 
-                                    target="_blank" 
-                                    rel="noopener noreferrer"
-                                    className="inline-flex items-center bg-[#fb6a69] text-white hover:bg-[#f5514f] font-medium py-2 px-4 rounded"
-                                  >
-                                    Read Full Article <ExternalLink className="w-4 h-4 ml-1" />
-                                  </a>
+                              
+                              {/* Content container - flexible height with proper spacing */}
+                              <div className="p-5 md:p-6 w-full md:w-3/4 flex flex-col justify-between">
+                                <div className="flex flex-col h-full">
+                                  <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-2 mb-3">
+                                    <span className="px-3 py-1 rounded-full text-xs font-medium inline-block bg-[#fb6a69]/10 text-[#fb6a69]">
+                                      News
+                                    </span>
+                                    <span className="text-gray-500 text-sm">{formatDate(newsItem.date, 'medium')}</span>
+                                  </div>
+                                  
+                                  <h2 className="text-xl md:text-2xl font-bold text-gray-800 mb-2 line-clamp-2">{newsItem.title}</h2>
+                                  
+                                  <div className="flex items-center text-gray-600 mb-4">
+                                    <User className="w-4 h-4 mr-2 flex-shrink-0" />
+                                    <span className="font-medium truncate">{newsItem.author}</span>
+                                  </div>
+                                  
+                                  <p className="text-gray-600 mb-4 line-clamp-3">{newsItem.summary}</p>
+                                  
+                                  <div className="mt-auto pt-2">
+                                    <a 
+                                      href={newsItem.readMoreLink} 
+                                      target="_blank" 
+                                      rel="noopener noreferrer"
+                                      className="inline-flex items-center bg-[#fb6a69] text-white hover:bg-[#f5514f] font-medium py-2 px-4 rounded transition-colors"
+                                    >
+                                      Read Full Article <ExternalLink className="w-4 h-4 ml-1" />
+                                    </a>
+                                  </div>
                                 </div>
                               </div>
                             </div>

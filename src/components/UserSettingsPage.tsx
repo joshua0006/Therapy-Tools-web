@@ -1051,6 +1051,7 @@ const UserSettingsPage: React.FC = () => {
     const billingCycle = user?.subscription?.billingCycle || 'monthly';
     const isActive = isSubscriptionActive();
     const daysRemaining = getSubscriptionRemainingDays();
+    const stackedCount = user?.subscription?.stackedCount || 0;
     
     // Format price display with plan and billing cycle
     const getFormattedPlan = () => {
@@ -1059,7 +1060,45 @@ const UserSettingsPage: React.FC = () => {
       let planName = subscriptionPlan.charAt(0).toUpperCase() + subscriptionPlan.slice(1);
       return `${planName} (${billingCycle.charAt(0).toUpperCase() + billingCycle.slice(1)})`;
     };
+
+    // Get subscription history with stacking information
+    const stackedSubscriptions = user?.subscriptionHistory?.filter(sub => sub.isStacked) || [];
     
+    // Calculate total additional time from stacked subscriptions
+    const calculateStackedDuration = () => {
+      if (!stackedSubscriptions.length) return null;
+      
+      let baseDate = new Date();
+      
+      // Calculate what the end date would be without stacking (just one subscription)
+      if (user?.subscription?.billingCycle === 'yearly') {
+        baseDate.setFullYear(baseDate.getFullYear() + 1);
+      } else {
+        baseDate.setMonth(baseDate.getMonth() + 1);
+      }
+      
+      // Calculate additional time from stacking
+      if (user?.subscription?.endDate) {
+        const actualEndDate = new Date(user.subscription.endDate);
+        const extraDays = Math.round((actualEndDate.getTime() - baseDate.getTime()) / (1000 * 60 * 60 * 24));
+        
+        if (extraDays > 0) {
+          const extraMonths = Math.floor(extraDays / 30);
+          const remainingDays = extraDays % 30;
+          
+          if (extraMonths > 0) {
+            return `${extraMonths} month${extraMonths !== 1 ? 's' : ''}${remainingDays > 0 ? ` and ${remainingDays} day${remainingDays !== 1 ? 's' : ''}` : ''}`;
+          } else {
+            return `${extraDays} day${extraDays !== 1 ? 's' : ''}`;
+          }
+        }
+      }
+      
+      return null;
+    };
+    
+    const stackedDuration = calculateStackedDuration();
+
     return (
       <div className="space-y-8 py-8">
         <div className="bg-white shadow-sm rounded-lg p-6">
@@ -1218,6 +1257,32 @@ const UserSettingsPage: React.FC = () => {
                 </div>
               </div>
               
+              {stackedCount > 0 && (
+                <div className="bg-blue-50 border border-blue-100 rounded-lg p-4 mb-2">
+                  <div className="flex items-start">
+                    <div className="flex-shrink-0 mt-0.5">
+                      <svg className="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                      </svg>
+                    </div>
+                    <div className="ml-3">
+                      <h3 className="text-sm font-medium text-blue-800">Stacked Subscription</h3>
+                      <div className="mt-2 text-sm text-blue-700">
+                        <p>
+                          You've stacked {stackedCount} subscription{stackedCount !== 1 ? 's' : ''}, 
+                          extending your membership until {subscriptionEndDate}.
+                          {stackedDuration && (
+                            <span className="block mt-1">
+                              Your stacked subscriptions have added <span className="font-semibold">{stackedDuration}</span> of additional access time!
+                            </span>
+                          )}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+              
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div className="space-y-1">
                   <p className="text-sm text-gray-500">Plan</p>
@@ -1242,32 +1307,39 @@ const UserSettingsPage: React.FC = () => {
                 </div>
               </div>
               
-              {user?.membershipInfo && (
+              {stackedSubscriptions.length > 0 && (
                 <div className="border-t border-gray-200 pt-4 mt-6">
-                  <h4 className="font-medium text-gray-800 mb-3">Membership Details</h4>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
-                    <div>
-                      <p className="text-gray-500">Join Date</p>
-                      <p className="font-medium">
-                        {user.membershipInfo.joinDate ? new Date(user.membershipInfo.joinDate).toLocaleDateString() : 'N/A'}
-                      </p>
-                    </div>
-                    <div>
-                      <p className="text-gray-500">Total Purchases</p>
-                      <p className="font-medium">{user.membershipInfo.totalPurchases || 0}</p>
-                    </div>
-                    <div>
-                      <p className="text-gray-500">Renewal Count</p>
-                      <p className="font-medium">{user.membershipInfo.renewalCount || 0}</p>
-                    </div>
-                    <div>
-                      <p className="text-gray-500">Total Spend</p>
-                      <p className="font-medium">
-                        ${typeof user.membershipInfo.totalSpend === 'number' 
-                          ? user.membershipInfo.totalSpend.toFixed(2) 
-                          : '0.00'}
-                      </p>
-                    </div>
+                  <h4 className="font-medium text-gray-800 mb-3">Stacked Subscription History</h4>
+                  <div className="overflow-hidden bg-white border border-gray-200 rounded-md">
+                    <ul className="divide-y divide-gray-200">
+                      {stackedSubscriptions.map((sub, index) => (
+                        <li key={index} className="p-4">
+                          <div className="flex justify-between items-center">
+                            <div>
+                              <p className="font-medium text-gray-800">
+                                {sub.plan.charAt(0).toUpperCase() + sub.plan.slice(1)} Plan
+                              </p>
+                              <p className="text-sm text-gray-500">
+                                Purchased on {new Date(sub.purchaseDate).toLocaleDateString()}
+                              </p>
+                              {sub.expiryDate && (
+                                <p className="text-xs text-gray-500">
+                                  Extended until {new Date(sub.expiryDate).toLocaleDateString()}
+                                </p>
+                              )}
+                            </div>
+                            <div className="text-right">
+                              <p className="text-sm font-medium text-gray-800">
+                                ${typeof sub.amount === 'number' ? sub.amount.toFixed(2) : '0.00'}
+                              </p>
+                              <p className="text-xs text-gray-500">
+                                {sub.billingCycle.charAt(0).toUpperCase() + sub.billingCycle.slice(1)}
+                              </p>
+                            </div>
+                          </div>
+                        </li>
+                      ))}
+                    </ul>
                   </div>
                 </div>
               )}

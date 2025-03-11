@@ -12,6 +12,7 @@ This is a website for speech therapy professionals built with React, TypeScript,
 - Membership-focused content
 - Resource sharing for speech pathologists
 - Community building features
+- Secure payment processing with Stripe
 
 ## Getting Started
 
@@ -19,6 +20,7 @@ This is a website for speech therapy professionals built with React, TypeScript,
 
 - Node.js (v14 or higher recommended)
 - npm or yarn
+- Stripe account for payment processing
 
 ### Installation
 
@@ -34,14 +36,31 @@ npm install
 yarn
 ```
 
-3. Start the development server:
+3. Set up environment variables:
+   - Copy `.env.example` to `.env`
+   - Replace the Stripe API keys with your actual keys from your Stripe dashboard
+
+```bash
+cp .env.example .env
+```
+
+4. Start the development server:
 ```bash
 npm run dev
 # or
 yarn dev
 ```
 
-4. Open your browser and navigate to `http://localhost:5173`
+5. Open your browser and navigate to `http://localhost:5173`
+
+## Payment Integration
+
+This project uses Stripe for secure payment processing. To set up Stripe:
+
+1. Create a Stripe account at [stripe.com](https://stripe.com)
+2. Get your API keys from the Stripe Dashboard
+3. Add your publishable key to the `.env` file as `VITE_STRIPE_PUBLISHABLE_KEY`
+4. For production, set up webhook endpoints and add the webhook secret to `.env`
 
 ## Project Structure
 

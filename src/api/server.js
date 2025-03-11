@@ -41,9 +41,6 @@ app.post('/api/capture-paypal-order', paypalHandlers.captureOrder);
 // Verification endpoint
 app.post('/api/verify-payment', paymentSuccessHandlers.verifyPaymentStatus);
 
-// Start the server
-app.listen(PORT, () => {
-  console.log(`Payment API server running on port ${PORT}`);
-});
+
 
 module.exports = app; 

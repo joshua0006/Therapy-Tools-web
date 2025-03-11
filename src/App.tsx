@@ -24,6 +24,7 @@ import ThankYouPage from './components/ThankYouPage'
 import BookmarksPage from './components/BookmarksPage'
 import TermsOfUsePage from './components/TermsOfUsePage'
 import ApiTestPage from './components/ApiTestPage'
+import SessionManager from './components/SessionManager'
 
 // Error boundary component to catch errors
 const ErrorFallback: React.FC<FallbackProps> = ({ error, resetErrorBoundary }) => {
@@ -54,6 +55,7 @@ const AppContent: React.FC = () => {
   return (
     <>
       <ScrollToTop />
+      <SessionManager />
       <Toaster 
         position="top-right"
         toastOptions={{

@@ -24,12 +24,6 @@ const firebaseConfig = {
 let app: any = null;
 
 try {
-  console.log('Initializing Firebase with config:', {
-    apiKey: firebaseConfig.apiKey,
-    authDomain: firebaseConfig.authDomain,
-    projectId: firebaseConfig.projectId
-  });
-  
   // Initialize Firebase
   app = initializeApp(firebaseConfig);
   
@@ -38,18 +32,11 @@ try {
   
   // Enable offline persistence for better user experience
   enableIndexedDbPersistence(db)
-    .then(() => console.log('Firebase offline persistence enabled'))
     .catch((error) => {
-      if (error.code === 'failed-precondition') {
-        console.warn('Firebase persistence could not be enabled (multiple tabs open)');
-      } else if (error.code === 'unimplemented') {
-        console.warn('Firebase persistence not supported by this browser');
-      } else {
+      if (error.code !== 'failed-precondition' && error.code !== 'unimplemented') {
         console.error('Firebase persistence error:', error);
       }
     });
-  
-  console.log('Firebase initialized successfully');
 } catch (error) {
   console.error('Firebase initialization error:', error);
 }

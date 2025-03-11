@@ -30,8 +30,7 @@ export const WooCommerceProvider: React.FC<WooCommerceProviderProps> = ({ childr
     setLoading(true);
     setError(null);
     try {
-      // Test OAuth imports
-      console.log('Testing OAuth imports:', testOAuthImports());
+     
       
       const [productsData, categoriesData] = await Promise.all([
         fetchProducts(),

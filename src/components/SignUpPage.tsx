@@ -353,14 +353,8 @@ const SignUpPage: React.FC = () => {
           </div>
 
           {/* Form ends after password section */}
-          <div className="flex justify-end mt-8">
-            <button
-              type="button"
-              onClick={() => navigate('/signin')}
-              className="bg-white py-2 px-4 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[#2bcd82] mr-4"
-            >
-              Back to Login
-            </button>
+          <div className="flex justify-center mt-8">
+            
             <button
               type="submit"
               className="bg-[#2bcd82] py-2 px-6 border border-transparent rounded-md shadow-sm text-sm font-medium text-white hover:bg-[#25b975] focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[#2bcd82]"

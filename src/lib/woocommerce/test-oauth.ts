@@ -23,10 +23,10 @@ export function testOAuthImports(): boolean {
     };
     
     const header = oauth.toHeader(oauth.authorize(requestData));
-    console.log('OAuth test successful:', header);
+   
     return true;
   } catch (error) {
-    console.error('OAuth test failed:', error);
+   
     return false;
   }
 } 
