@@ -15,13 +15,11 @@ interface PlanFeature {
 const PlansPage: React.FC = () => {
   const navigate = useNavigate();
   const { isLoggedIn, user, isSubscriptionActive, getSubscriptionRemainingDays } = useAuth();
-  const [subscriptionType, setSubscriptionType] = useState<'monthly' | 'yearly'>('monthly');
   const [hasActiveSubscription, setHasActiveSubscription] = useState<boolean>(false);
   const [daysRemaining, setDaysRemaining] = useState<number>(0);
 
-  // Define plan prices as constants to ensure consistency
-  const MONTHLY_PRICE = 24.99;
-  const YEARLY_PRICE = 249.99;
+  // Define plan price as a constant to ensure consistency
+  const YEARLY_PRICE = 2500.00;
 
   // Check if user has active subscription
   useEffect(() => {
@@ -31,12 +29,6 @@ const PlansPage: React.FC = () => {
       
       if (isActive) {
         setDaysRemaining(getSubscriptionRemainingDays());
-        // Set the subscription type based on user's current plan
-        if (user.subscription.billingCycle === 'yearly') {
-          setSubscriptionType('yearly');
-        } else {
-          setSubscriptionType('monthly');
-        }
       }
     }
   }, [isLoggedIn, user, isSubscriptionActive, getSubscriptionRemainingDays]);
@@ -71,16 +63,14 @@ const PlansPage: React.FC = () => {
     }
   ];
 
-  const handleGetStarted = (plan: 'monthly' | 'yearly') => {
-    const price = plan === 'monthly' ? MONTHLY_PRICE : YEARLY_PRICE;
-    
+  const handleGetStarted = () => {
     // Include full pricing details in the URL for the checkout page to use
-    navigate(`/checkout?plan=premium&billing=${plan}&price=${price}&display_price=${plan === 'monthly' ? '$24.99/month' : '$249.99/year'}`);
+    navigate(`/checkout?plan=premium&billing=yearly&price=${YEARLY_PRICE}&display_price=$${YEARLY_PRICE.toFixed(2)}/year`);
     
     // Also set session storage to persist the price selection in case the URL parameters get lost
-    sessionStorage.setItem('selectedPlan', plan);
-    sessionStorage.setItem('selectedPrice', price.toString());
-    sessionStorage.setItem('displayPrice', plan === 'monthly' ? '$24.99/month' : '$249.99/year');
+    sessionStorage.setItem('selectedPlan', 'yearly');
+    sessionStorage.setItem('selectedPrice', YEARLY_PRICE.toString());
+    sessionStorage.setItem('displayPrice', `$${YEARLY_PRICE.toFixed(2)}/year`);
   };
 
   return (
@@ -91,7 +81,7 @@ const PlansPage: React.FC = () => {
         <div className="text-center mb-6 bg-white rounded-2xl p-6 shadow-sm">
           <h1 className="text-3xl font-bold mb-2 bg-clip-text text-transparent bg-gradient-to-r from-[#2bcd82] to-[#25b975]">Premium Membership</h1>
           <p className="text-md text-gray-600 max-w-3xl mx-auto">
-            Unlock your full potential with our all-inclusive membership
+            Unlock your full potential with our all-inclusive annual membership
           </p>
           <div className="mt-3 max-w-sm mx-auto h-1 bg-gradient-to-r from-[#2bcd82] to-transparent rounded-full"></div>
         </div>
@@ -106,7 +96,7 @@ const PlansPage: React.FC = () => {
               <div>
                 <h3 className="font-medium text-gray-800">Active Subscription</h3>
                 <p className="text-sm text-gray-600">
-                  You have an active {user?.subscription?.billingCycle || 'monthly'} subscription to our {user?.subscription?.plan || 'premium'} plan.
+                  You have an active yearly subscription to our {user?.subscription?.plan || 'premium'} plan.
                 </p>
                 <div className="flex items-center mt-1">
                   <Calendar className="w-4 h-4 text-green-600 mr-1" />
@@ -138,7 +128,7 @@ const PlansPage: React.FC = () => {
             <div className="p-6">
               {/* Premium plan badge */}
               <div className="inline-block bg-gradient-to-r from-[#2bcd82] to-[#25b975] text-white px-3 py-1 rounded-full font-bold text-xs mb-3">
-                MOST POPULAR
+                ANNUAL PLAN
               </div>
               
               <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-4">
@@ -147,52 +137,13 @@ const PlansPage: React.FC = () => {
                   <p className="text-gray-600">Complete solution for speech pathology professionals</p>
                 </div>
                 
-                {/* Pricing Toggle */}
-                <div className="mt-2 md:mt-0 flex flex-col items-end">
-                  <div className="flex items-center mb-2">
-                    <span 
-                      className={`cursor-pointer text-sm mr-2 ${subscriptionType === 'monthly' ? 'font-bold text-[#2bcd82]' : 'text-gray-500'}`}
-                      onClick={() => setSubscriptionType('monthly')}
-                    >
-                      Monthly
-                    </span>
-                    <div 
-                      className="w-12 h-6 bg-gray-200 rounded-full p-1 cursor-pointer"
-                      onClick={() => setSubscriptionType(subscriptionType === 'monthly' ? 'yearly' : 'monthly')}
-                    >
-                      <div 
-                        className={`h-4 w-4 rounded-full transition-all ${
-                          subscriptionType === 'yearly' ? 'ml-6 bg-[#2bcd82]' : 'ml-0 bg-gray-400'
-                        }`}
-                      ></div>
-                    </div>
-                    <span 
-                      className={`cursor-pointer text-sm ml-2 ${subscriptionType === 'yearly' ? 'font-bold text-[#2bcd82]' : 'text-gray-500'}`}
-                      onClick={() => setSubscriptionType('yearly')}
-                    >
-                      Yearly
-                    </span>
+                {/* Pricing Display */}
+                <div className="mt-4 md:mt-0 flex flex-col items-end">
+                  <div className="flex items-baseline">
+                    <span className="text-4xl font-bold text-[#fb6a69]">${YEARLY_PRICE.toFixed(2)}</span>
+                    <span className="text-gray-500 ml-2">per year</span>
                   </div>
-                  
-                  <div className="h-20 flex flex-col justify-center"> {/* Fixed height container to prevent layout shift */}
-                    {subscriptionType === 'monthly' ? (
-                      <div className="flex flex-col items-end">
-                        <div className="flex items-baseline">
-                          <span className="text-4xl font-bold text-[#fb6a69]">${MONTHLY_PRICE}</span>
-                          <span className="text-gray-500 ml-2">per month</span>
-                        </div>
-                        <div className="text-xs text-transparent">Spacer to prevent layout shift</div>
-                      </div>
-                    ) : (
-                      <div className="flex flex-col items-end">
-                        <div className="flex items-baseline">
-                          <span className="text-4xl font-bold text-[#fb6a69]">${YEARLY_PRICE}</span>
-                          <span className="text-gray-500 ml-2">per year</span>
-                        </div>
-                        <div className="text-xs text-green-600 font-medium">Save 17% (${(MONTHLY_PRICE * 12 - YEARLY_PRICE).toFixed(2)}/year)</div>
-                      </div>
-                    )}
-                  </div>
+                  <div className="text-xs text-green-600 font-medium">Premium Annual Subscription</div>
                 </div>
               </div>
               
@@ -219,52 +170,25 @@ const PlansPage: React.FC = () => {
                     </div>
                   </div>
                 ))}
-              </div>
-              
-              {/* Subscription Buttons */}
-              <div className="flex flex-col md:flex-row gap-4 mt-6">
-                <div className="bg-gradient-to-r from-pink-50 to-orange-50 p-3 rounded-xl border border-pink-100 flex-1">
-                  <div className="flex items-center">
-                    <div className="text-[#fb6a69] mr-3">
-                      <Star className="w-6 h-6 fill-current" />
-                    </div>
-                    <div>
-                      <h4 className="font-bold text-gray-800">Special Offer</h4>
-                      <p className="text-gray-600 text-sm">Sign up today for a 14-day free trial!</p>
-                    </div>
-                  </div>
-                </div>
-                </div>
+              </div>              
                 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
+              <div className="mt-4">
                 <Button 
                   variant="primary" 
                   size="large" 
-                  className="py-3 shadow-lg"
-                  onClick={() => handleGetStarted('monthly')}
-                >
-                  <span className="flex flex-col items-center">
-                    <span>Get Monthly Plan</span>
-                    <span className="text-xs font-normal">${MONTHLY_PRICE}/month</span>
-                  </span>
-                </Button>
-                
-                <Button 
-                  variant="secondary" 
-                  size="large" 
-                  className="py-3 shadow-lg"
-                  onClick={() => handleGetStarted('yearly')}
+                  className="py-3 shadow-lg w-full"
+                  onClick={() => handleGetStarted()}
                 >
                   <span className="flex flex-col items-center">
                     <span>Get Yearly Plan</span>
-                    <span className="text-xs font-normal">${YEARLY_PRICE}/year (Save 17%)</span>
+                    <span className="text-xs font-normal">${YEARLY_PRICE.toFixed(2)}/year</span>
                   </span>
                 </Button>
               </div>
               
               <p className="text-center text-gray-500 text-xs mt-2">No credit card required for free trial. Cancel anytime.</p>
             </div>
-                      </div>
+          </div>
           
           {/* Condensed testimonials and FAQ */}
           <div className="mt-4 flex flex-col md:flex-row gap-4">
@@ -292,9 +216,9 @@ const PlansPage: React.FC = () => {
                   <p className="text-xs text-gray-600">Yes, cancel anytime. Your access continues until the end of your billing cycle.</p>
                 </div>
                 <div>
-                  <h3 className="text-sm font-medium text-gray-800">Is there a discount for annual billing?</h3>
-                  <p className="text-xs text-gray-600">Yes, save 17% with our annual plan ($249.99/year).</p>
-        </div>
+                  <h3 className="text-sm font-medium text-gray-800">Is there a monthly option?</h3>
+                  <p className="text-xs text-gray-600">We currently only offer an annual plan at $2,500/year for the best value.</p>
+                </div>
               </div>
             </div>
           </div>

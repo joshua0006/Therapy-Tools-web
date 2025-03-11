@@ -45,11 +45,11 @@ const ThankYouPage: React.FC = () => {
             </div>
             
             <h1 className="text-3xl font-bold text-gray-800 mb-3">Thank You!</h1>
-            <p className="text-xl text-gray-600">Your order has been placed successfully.</p>
+            <p className="text-xl text-gray-600">Your annual subscription has been activated successfully.</p>
           </div>
           
           <div className="bg-gray-50 rounded-lg p-6 mb-8">
-            <h2 className="text-lg font-semibold text-gray-700 mb-4">Order Details</h2>
+            <h2 className="text-lg font-semibold text-gray-700 mb-4">Subscription Details</h2>
             
             <div className="space-y-4">
               <div className="flex justify-between border-b border-gray-200 pb-3">
@@ -60,6 +60,11 @@ const ThankYouPage: React.FC = () => {
               <div className="flex justify-between border-b border-gray-200 pb-3">
                 <span className="text-gray-600">Amount:</span>
                 <span className="font-medium">${state.amount}</span>
+              </div>
+              
+              <div className="flex justify-between border-b border-gray-200 pb-3">
+                <span className="text-gray-600">Plan:</span>
+                <span className="font-medium">Annual Premium Subscription</span>
               </div>
               
               {state.email && (
@@ -75,26 +80,19 @@ const ThankYouPage: React.FC = () => {
             <h2 className="text-lg font-semibold text-blue-700 mb-3">What's Next?</h2>
             <ul className="list-disc list-inside space-y-2 text-blue-700">
               <li>A confirmation email has been sent to your email address.</li>
-              <li>You can access your purchased resources in your account dashboard.</li>
+              <li>Your annual subscription is now active and will be valid for one year.</li>
+              <li>You now have unlimited access to all premium resources.</li>
               <li>For any questions, contact our support team.</li>
             </ul>
           </div>
           
-          <div className="flex flex-col md:flex-row gap-4 justify-center">
+          <div className="flex justify-center">
             <Button
               variant="primary"
               size="large"
-              onClick={() => navigate('/purchases')}
-            >
-              Go to My Purchases
-            </Button>
-            
-            <Button
-              variant="secondary"
-              size="large"
               onClick={() => navigate('/catalog')}
             >
-              Continue Shopping
+              Browse Catalogs
             </Button>
           </div>
         </div>

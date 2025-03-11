@@ -77,41 +77,20 @@ const CheckoutPage: React.FC<CheckoutPageProps> = ({ productId }) => {
   // Get plan ID from URL query parameters
   const queryParams = new URLSearchParams(location.search);
   const planId = queryParams.get('plan');
-  const billingCycle = queryParams.get('billing') || 'monthly';
-  const priceParam = queryParams.get('price');
-  const displayPrice = queryParams.get('display_price');
+  const billingCycle = 'yearly'; // Always yearly
+  const priceParam = queryParams.get('price') || '2500';
+  const displayPrice = queryParams.get('display_price') || '$2500.00/year';
 
   // If we have a price parameter, use it (convert from string to number)
-  const priceAmount = priceParam ? parseFloat(priceParam) * 100 : null; // Convert to cents
+  const priceAmount = priceParam ? parseFloat(priceParam) * 100 : 250000; // Convert to cents, default to $2500
 
   // Define available plans
   const availablePlans = [
     {
-      id: '1',
-      name: 'Basic Plan',
-      description: 'Essential resources for individual speech pathologists',
-      amount: 999, // $9.99 in cents
-      imageUrl: 'https://images.unsplash.com/photo-1434030216411-0b793f4b4173?ixlib=rb-1.2.1&auto=format&fit=crop&w=800&q=80'
-    },
-    {
-      id: '2',
-      name: 'Professional Plan',
-      description: 'Complete toolkit for practicing professionals',
-      amount: 1999, // $19.99 in cents
-      imageUrl: 'https://images.unsplash.com/photo-1454165804606-c3d57bc86b40?ixlib=rb-1.2.1&auto=format&fit=crop&w=800&q=80'
-    },
-    {
-      id: '3',
-      name: 'Clinic Plan',
-      description: 'For clinics and multi-therapist practices',
-      amount: 4999, // $49.99 in cents
-      imageUrl: 'https://images.unsplash.com/photo-1576267423445-b2e0074d68a4?ixlib=rb-1.2.1&auto=format&fit=crop&w=800&q=80'
-    },
-    {
       id: 'premium',
       name: 'Speech Therapy Premium Access',
-      description: 'Subscription to all premium resources',
-      amount: priceAmount || 2499, // Default price is $24.99 instead of $99
+      description: 'Annual subscription to all premium resources',
+      amount: priceAmount || 250000, // Default price is $2500 in cents
       imageUrl: 'https://images.unsplash.com/photo-1454165804606-c3d57bc86b40?ixlib=rb-1.2.1&auto=format&fit=crop&w=800&q=80'
     }
   ];
@@ -128,6 +107,11 @@ const CheckoutPage: React.FC<CheckoutPageProps> = ({ productId }) => {
         if (premiumPlan) {
           premiumPlan.amount = parseFloat(storedPrice) * 100;
         }
+      } else {
+        // Default to annual subscription if nothing in session storage
+        sessionStorage.setItem('selectedPlan', 'yearly');
+        sessionStorage.setItem('selectedPrice', '2500');
+        sessionStorage.setItem('displayPrice', '$2500.00/year');
       }
     }
   }, [planId, priceParam]);
@@ -143,19 +127,19 @@ const CheckoutPage: React.FC<CheckoutPageProps> = ({ productId }) => {
   // Use cart total or selected plan for payment amount
   const paymentAmount = showCartItems 
     ? Math.round(getTotalPrice() * 100) // Convert to cents
-    : (selectedPlan?.amount || 1999);
+    : (selectedPlan?.amount || 250000);
   
   // Use selected plan if no cart items
   const product = useMemo(() => {
     return {
-      id: planId || 'premium-plan',
-      name: planId === 'premium-plan' ? 'Speech Therapy Premium Access' : 'Premium Access',
-      description: 'Subscription to all premium resources',
-      amount: priceAmount || 2499, // Default price is $24.99 instead of $99
-      billingCycle: billingCycle || 'monthly',
+      id: planId || 'premium',
+      name: 'Speech Therapy Premium Access',
+      description: 'Annual subscription to all premium resources',
+      amount: priceAmount || 250000, // Default price is $2500 in cents
+      billingCycle: 'yearly',
       imageUrl: 'https://images.unsplash.com/photo-1454165804606-c3d57bc86b40?ixlib=rb-1.2.1&auto=format&fit=crop&w=800&q=80'
     };
-  }, [planId, priceAmount, billingCycle]);
+  }, [planId, priceAmount]);
 
   const handlePaymentMethodSelect = () => {
     // Since we're only using Stripe now, simply set it as the payment method
@@ -192,11 +176,11 @@ const CheckoutPage: React.FC<CheckoutPageProps> = ({ productId }) => {
         if (planId && typeof planId === 'string' && planId.trim() !== '') {
           purchaseData.subscription = {
             plan: planId,
-            billingCycle: billingCycle || 'monthly',
+            billingCycle: 'yearly', // Always yearly
             price: (product.amount / 100).toFixed(2),
             status: 'active',
             endDate: new Date(new Date().setMonth(
-              new Date().getMonth() + (billingCycle === 'yearly' ? 12 : 1)
+              new Date().getMonth() + 12 // Always 12 months
             )).toISOString()
           };
         } else {
@@ -404,69 +388,12 @@ const CheckoutPage: React.FC<CheckoutPageProps> = ({ productId }) => {
             {/* Left Column - Your Information and Payment Method */}
             <div className="w-full lg:w-7/12 order-2 lg:order-1">
               {/* Your Information Section */}
-              <div className="bg-white rounded-lg shadow-sm p-6 mb-6">
-                <h2 className="text-xl font-semibold mb-4 pb-3 border-b border-gray-100">Account Details</h2>
-                
-                <div className="mb-4">
-                  <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-1">
-                    Email Address <span className="text-red-500">*</span>
-                  </label>
-                  <input
-                    type="email"
-                    id="email"
-                    name="email"
-                    value={contactInfo.email}
-                    onChange={handleContactInfoChange}
-                    className="w-full p-3 border border-gray-300 rounded-md focus:ring-1 focus:ring-[#2bcd82] focus:border-[#2bcd82] transition-colors"
-                    required
-                  />
-                  <p className="mt-1 text-xs text-gray-500">We'll send your receipt, login details, and subscription information to this email</p>
-                </div>
-                
-                {/* Add Subscription Information */}
-                <div className="bg-yellow-50 rounded-lg p-4 mb-6">
-                  <h3 className="text-sm font-semibold text-yellow-800 mb-2 flex items-center">
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                    </svg>
-                    About Your Subscription
-                  </h3>
-                  
-              
-                  
-                  <ul className="text-sm text-yellow-700 space-y-2">
-                    <li className="flex items-start">
-                      <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-1.5 text-yellow-600 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                      </svg>
-                      <span>Your subscription will begin {hasActiveSubscription ? 'extending your current membership' : 'immediately'} after payment is processed</span>
-                    </li>
-                    <li className="flex items-start">
-                      <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-1.5 text-yellow-600 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
-                      </svg>
-                      <span>You'll be billed {billingCycle === 'yearly' ? 'annually' : 'monthly'} until you cancel</span>
-                    </li>
-                    {hasActiveSubscription && (
-                      <li className="flex items-start">
-                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-1.5 text-yellow-600 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                        </svg>
-                        <span>You can stack multiple subscriptions to extend your membership even further</span>
-                      </li>
-                    )}
-                    <li className="flex items-start">
-                      <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-1.5 text-yellow-600 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 11V7a4 4 0 118 0m-4 8v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2z" />
-                      </svg>
-                      <span>You can manage or cancel your subscription anytime from your account dashboard</span>
-                    </li>
-                  </ul>
-                </div>
+              <div className="bg-white rounded-lg shadow-sm p-6">
+              <h3 className="text-xl font-semibold mb-4 pb-2 border-b border-gray-100">Payment Details</h3>
                 
                 {/* Add Payment Details section - existing content */}
                 <div className="mt-8 mb-6">
-                  <h3 className="text-md font-semibold mb-4 pb-2 border-b border-gray-100">Payment Details</h3>
+                  
                   
                   <div className="mb-3 flex items-center">
                     <div className="w-8 h-8 rounded-full bg-[#f0fdf4] flex items-center justify-center mr-3">
@@ -646,19 +573,8 @@ const CheckoutPage: React.FC<CheckoutPageProps> = ({ productId }) => {
                         <p className="text-gray-600 text-sm">{product.description}</p>
                         <div className="flex items-center mt-2">
                           <p className="text-[#fb6a69] font-bold">
-                            {displayPrice ? displayPrice : `$${(product.amount / 100).toFixed(2)}`}
-                            {billingCycle && !displayPrice && <span className="text-gray-500 font-normal text-sm">/{billingCycle}</span>}
+                            {displayPrice}
                           </p>
-                          {billingCycle === 'monthly' && (
-                            <span className="ml-2 text-xs bg-blue-50 text-blue-600 px-2 py-0.5 rounded-full">
-                              Most flexible
-                            </span>
-                          )}
-                          {billingCycle === 'yearly' && (
-                            <span className="ml-2 text-xs bg-green-50 text-green-600 px-2 py-0.5 rounded-full">
-                              Best value
-                            </span>
-                          )}
                         </div>
                       </div>
                     </div>
