@@ -1,18 +1,8 @@
 [
   {
-    "origin": [
-      "http://localhost:5173",
-      "http://localhost:3000",
-      "https://adventuresinspeechpathology.com"
-    ],
-    "method": ["GET", "HEAD", "OPTIONS"],
-    "responseHeader": [
-      "Content-Type",
-      "Access-Control-Allow-Origin",
-      "Content-Length",
-      "Content-Range",
-      "Range"
-    ],
+    "origin": ["https://www.adventuresinspeechpathology.com", "http://localhost:5173"],
+    "method": ["GET", "HEAD", "PUT", "POST", "DELETE"],
+    "responseHeader": ["Content-Type", "Content-Disposition", "Content-Length"],
     "maxAgeSeconds": 3600
   }
 ] 

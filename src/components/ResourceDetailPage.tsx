@@ -1,14 +1,22 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, ShoppingCart, Check, Star, Loader, Clock, BookOpen, Users, AlertCircle, FileText, LockIcon, Info, CheckCircle, Tag, X, Bookmark, BookmarkPlus, Loader2 } from 'lucide-react';
+import { ArrowLeft, ShoppingCart, Check, Star, Loader, Clock, BookOpen, Users, AlertCircle, FileText, LockIcon, Info, CheckCircle, Tag, X, Bookmark, BookmarkPlus, Loader2, Layers, AlertTriangle, RefreshCw } from 'lucide-react';
 import Header from './Header';
 import Footer from './Footer';
 import Button from './Button';
 import { useAuth } from '../context/AuthContext';
 import { toast } from 'react-hot-toast';
-import { getFirestore, doc, getDoc, collection, query, where, getDocs, setDoc, arrayUnion, updateDoc } from 'firebase/firestore';
+import { getFirestore, doc, getDoc, collection, query, where, getDocs, setDoc, arrayUnion, updateDoc, addDoc, deleteDoc, limit } from 'firebase/firestore';
 import { app } from '../lib/firebase';
 import SecurePdfViewer from './SecurePdfViewer';
+import { fetchPdfAsArrayBuffer, getProxiedPdfUrl } from '../services/pdfService';
+
+// Add PDF.js type declarations
+declare global {
+  interface Window {
+    pdfjsLib: any; // Using any type to avoid conflicts
+  }
+}
 
 // Use the same FirebaseProduct interface as in CatalogPage
 interface FirebaseProduct {
@@ -102,18 +110,6 @@ const containsHtml = (text: string): boolean => {
   return /<\/?[a-z][\s\S]*>/i.test(text);
 };
 
-// This creates a fake original price that's 10-20% higher than the actual price
-const calculateOriginalPrice = (actualPrice: number): number => {
-  // Random discount between 10% and 20%
-  const discountPercentage = Math.floor(Math.random() * 11) + 10; // 10-20
-  
-  // Calculate the "original" price
-  const originalPrice = actualPrice * (100 / (100 - discountPercentage));
-  
-  // Round to 2 decimal places
-  return Math.round(originalPrice * 100) / 100;
-};
-
 // Calculate the discount percentage for a product
 const getDiscountPercentage = (actualPrice: number, originalPrice: number): number => {
   return Math.round(((originalPrice - actualPrice) / originalPrice) * 100);
@@ -132,11 +128,33 @@ const ResourceDetailPage: React.FC = () => {
   
   // PDF viewer states
   const [isPdfViewerVisible, setIsPdfViewerVisible] = useState(false);
-  const [pdfDetails, setPdfDetails] = useState<{ url: string; name: string } | null>(null);
+  const [pdfDetails, setPdfDetails] = useState<{ 
+    url: string; 
+    name: string;
+    initialPage?: number; // Add initialPage to the type
+  } | null>(null);
   
   // PDF list states
   const [availablePdfs, setAvailablePdfs] = useState<Array<{ url: string; name: string; id?: string }>>([]);
   const [showPdfList, setShowPdfList] = useState(false);
+  
+  // Add PDF preview states
+  const [showPdfPreview, setShowPdfPreview] = useState(false);
+  const [previewPdfDetails, setPreviewPdfDetails] = useState<{ 
+    url: string; 
+    name: string;
+    initialPage?: number;
+  } | null>(null);
+  const [pdfThumbnails, setPdfThumbnails] = useState<string[]>([]);
+  const [isPreviewLoading, setIsPreviewLoading] = useState(false);
+  const [previewError, setPreviewError] = useState<string | null>(null);
+  const [selectedPreviewPage, setSelectedPreviewPage] = useState<number | null>(null);
+  const [isNavigating, setIsNavigating] = useState(false);
+  const [loadingThumbnailsProgress, setLoadingThumbnailsProgress] = useState(0);
+  
+  // Add pagination for thumbnails
+  const [currentThumbnailPage, setCurrentThumbnailPage] = useState(1);
+  const THUMBNAILS_PER_PAGE = 12;
   
   const { user, isLoggedIn, getUserPurchaseHistory, isSubscriptionActive, getSubscriptionRemainingDays } = useAuth();
   
@@ -144,6 +162,13 @@ const ResourceDetailPage: React.FC = () => {
   const [isBookmarked, setIsBookmarked] = useState(false);
   const [bookmarkLoading, setBookmarkLoading] = useState(false);
   const [bookmarkCheckLoading, setBookmarkCheckLoading] = useState(true);
+  
+  // Add new states for page selection and email functionality
+  const [selectedPages, setSelectedPages] = useState<number[]>([]);
+  const [emailAddress, setEmailAddress] = useState<string>('');
+  const [isSendingEmail, setIsSendingEmail] = useState(false);
+  const [emailSent, setEmailSent] = useState(false);
+  const [emailError, setEmailError] = useState<string | null>(null);
   
   // Create Firestore instance directly
   const db = getFirestore(app);
@@ -566,7 +591,7 @@ const ResourceDetailPage: React.FC = () => {
     }
   };
   
-  // Modify the handleViewPdf function to show PDF list if multiple PDFs available
+  // Update handleViewPdf to also use our page reference mechanism
   const handleViewPdf = () => {
     if (!isLoggedIn) {
       toast.error('Please log in to view this PDF');
@@ -601,7 +626,15 @@ const ResourceDetailPage: React.FC = () => {
       
       if (pdfs.length === 1) {
         // If there's only one PDF, open it directly
-        setPdfDetails(pdfs[0]);
+        // Clear any existing page target data to view from beginning
+        sessionStorage.removeItem('pdfTargetPage');
+        sessionStorage.removeItem('pdfInitialPage');
+        
+        setPdfDetails({
+          url: pdfs[0].url,
+          name: pdfs[0].name,
+          initialPage: 1 // Always start at page 1 when using View PDF button
+        });
         setIsPdfViewerVisible(true);
       } else {
         // If there are multiple PDFs, show the selection list
@@ -610,14 +643,32 @@ const ResourceDetailPage: React.FC = () => {
     }
   };
   
-  // Add function to select a specific PDF to view
+  // Update the function to select a PDF for viewer
   const handleSelectPdf = (pdf: { url: string; name: string }) => {
+    // Clear any previous page navigation targets
+    sessionStorage.removeItem('pdfTargetPage');
+    sessionStorage.removeItem('pdfInitialPage');
+    
     setPdfDetails({
       url: pdf.url,
-      name: pdf.name
+      name: pdf.name,
+      initialPage: 1 // Always start at page 1 for direct view
     });
     setIsPdfViewerVisible(true);
     setShowPdfList(false);
+  };
+
+  // Update the function to select a PDF for preview or viewing
+  const handleSelectPdfForPreview = (pdf: { url: string; name: string }, forPreview: boolean = true) => {
+    if (forPreview) {
+      setPreviewPdfDetails(pdf);
+      setShowPdfPreview(true);
+      setShowPdfList(false);
+      setIsPreviewLoading(true);
+      setCurrentThumbnailPage(1); // Reset to first page of thumbnails
+    } else {
+      handleSelectPdf(pdf);
+    }
   };
 
   // Add function to close PDF list
@@ -635,6 +686,18 @@ const ResourceDetailPage: React.FC = () => {
   
   // Calculate the "original" price for the discount
   const originalPrice = useMemo(() => {
+    // This creates a fake original price that's 10-20% higher than the actual price
+    const calculateOriginalPrice = (actualPrice: number): number => {
+      // Random discount between 10% and 20%
+      const discountPercentage = Math.floor(Math.random() * 11) + 10; // 10-20
+      
+      // Calculate the "original" price
+      const originalPrice = actualPrice * (100 / (100 - discountPercentage));
+      
+      // Round to 2 decimal places
+      return Math.round(originalPrice * 100) / 100;
+    };
+    
     return calculateOriginalPrice(productPrice);
   }, [productPrice]);
   
@@ -661,6 +724,339 @@ const ResourceDetailPage: React.FC = () => {
         </p>
       </div>
     );
+  };
+  
+  // Add function to handle PDF preview
+  const handlePreviewPages = () => {
+    if (!isLoggedIn) {
+      toast.error('Please log in to preview PDF pages');
+      navigate('/signin');
+      return;
+    }
+    
+    if (product && resourceId) {
+      // Collect all available PDFs
+      const pdfs = collectAvailablePdfs(product);
+      
+      if (pdfs.length === 0) {
+        toast.error('No PDF files found for this product');
+        return;
+      }
+      
+      setAvailablePdfs(pdfs);
+      
+      if (pdfs.length === 1) {
+        // If there's only one PDF, preview it directly
+        setPreviewPdfDetails(pdfs[0]);
+        setShowPdfPreview(true);
+        setIsPreviewLoading(true);
+      } else {
+        // If there are multiple PDFs, show the selection list for preview
+        setShowPdfList(true);
+      }
+    }
+  };
+  
+  // Add function to handle preview retry
+  const handlePreviewRetry = () => {
+    if (previewPdfDetails) {
+      setIsPreviewLoading(true);
+      setPreviewError(null);
+      // The useEffect will trigger the thumbnail generation again
+    }
+  };
+
+  // Add function to close PDF preview
+  const handleClosePdfPreview = () => {
+    setShowPdfPreview(false);
+    setPreviewPdfDetails(null);
+    setPdfThumbnails([]);
+    setPreviewError(null);
+  };
+  
+  // Add function to handle clicking on a thumbnail to view that page
+  const handleThumbnailClick = (pageNumber: number) => {
+    if (previewPdfDetails) {
+      setSelectedPreviewPage(pageNumber);
+      setIsNavigating(true);
+      
+      // Log clear message about navigation
+      console.log(`[Preview] Navigating to PDF page ${pageNumber} for document ${previewPdfDetails.name}`);
+      
+      // Store additional metadata to ensure reliable page navigation
+      const pageData = JSON.stringify({
+        targetPage: pageNumber,
+        timestamp: Date.now(),
+        pdfId: resourceId,
+        pdfName: previewPdfDetails.name
+      });
+      
+      // Use structured data with a clear key name
+      sessionStorage.setItem('pdfTargetPage', pageData);
+      
+      // Create a fresh copy of the PDF details instead of reusing the same object reference
+      const pdfDetailsForViewer = {
+        url: previewPdfDetails.url,
+        name: previewPdfDetails.name,
+        initialPage: pageNumber // Add page number directly to the details object
+      };
+      
+      // Small delay to show the selection state before opening the viewer
+      setTimeout(() => {
+        try {
+          // First close the preview
+          setShowPdfPreview(false);
+          setPdfThumbnails([]);
+          
+          // Wait briefly for cleanup
+          setTimeout(() => {
+            // Open the viewer with the targeted page
+            console.log(`[Preview] Opening PDF viewer with initial page ${pageNumber}`);
+            setPdfDetails(pdfDetailsForViewer);
+            setIsPdfViewerVisible(true);
+            setSelectedPreviewPage(null);
+            setIsNavigating(false);
+          }, 100);
+        } catch (error) {
+          console.error("[Preview] Error during page navigation:", error);
+          toast.error("Error navigating to selected page");
+          setIsNavigating(false);
+        }
+      }, 300);
+    }
+  };
+  
+  // Add effect to generate thumbnails when preview details change
+  useEffect(() => {
+    if (!showPdfPreview || !previewPdfDetails) return;
+    
+    let isMounted = true;
+    
+    const generateThumbnails = async () => {
+      try {
+        setIsPreviewLoading(true);
+        setPreviewError(null);
+        setPdfThumbnails([]);
+        setLoadingThumbnailsProgress(0);
+        
+        // Use proxied URL and fetch as array buffer to avoid CORS issues
+        const pdfUrl = getProxiedPdfUrl(previewPdfDetails.url);
+        console.log('Fetching PDF data with proxy from:', pdfUrl);
+        
+        // Use the fetchPdfAsArrayBuffer utility that handles CORS
+        const pdfData = await fetchPdfAsArrayBuffer(pdfUrl);
+        
+        // If component unmounted during async operation, abort
+        if (!isMounted) return;
+        
+        // Check if PDF.js is loaded
+        if (typeof window.pdfjsLib === 'undefined') {
+          // Load PDF.js library if not already loaded
+          const pdfjsScript = document.createElement('script');
+          pdfjsScript.src = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js';
+          pdfjsScript.integrity = 'sha512-q+4lLh43mytYJ34/IqIGiTp3MvKnS0o9rNDkEIbPT1qPbUYq/ZqQ3Q9uhX+XUQ8P5JnFNNlzgOuqkCNtR6j+eA==';
+          pdfjsScript.crossOrigin = 'anonymous';
+          pdfjsScript.referrerPolicy = 'no-referrer';
+          document.head.appendChild(pdfjsScript);
+          
+          // Wait for PDF.js to load
+          await new Promise<void>((resolve) => {
+            pdfjsScript.onload = () => {
+              // Set worker path
+              window.pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+              resolve();
+            };
+          });
+        }
+        
+        // If component unmounted during async operation, abort
+        if (!isMounted) return;
+        
+        // Create a fresh copy of the data to avoid detachment issues
+        const pdfDataCopy = pdfData.slice(0);
+        
+        // Load the PDF document
+        const loadingTask = window.pdfjsLib.getDocument({
+          data: pdfDataCopy,
+          cMapUrl: 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/cmaps/',
+          cMapPacked: true,
+        });
+        
+        const pdf = await loadingTask.promise;
+        
+        // If component unmounted during async operation, abort
+        if (!isMounted) return;
+        
+        const totalPages = pdf.numPages;
+        toast.success(`PDF loaded successfully - ${totalPages} pages`);
+        
+        // Generate thumbnails for all pages (no page limit)
+        const pagesToGenerate = totalPages;
+        const thumbnailsArray: string[] = [];
+        
+        // Progress update function
+        const updateProgress = (current: number) => {
+          if (isMounted) {
+            const progress = Math.round((current / pagesToGenerate) * 100);
+            setLoadingThumbnailsProgress(progress);
+          }
+        };
+        
+        for (let i = 1; i <= pagesToGenerate; i++) {
+          // Check if component is still mounted
+          if (!isMounted) return;
+          
+          try {
+            // Get the page
+            const page = await pdf.getPage(i);
+            
+            // Adjust scale based on total pages for performance optimization
+            const scale = totalPages > 50 ? 0.15 : totalPages > 20 ? 0.18 : 0.2;
+            const viewport = page.getViewport({ scale });
+            
+            // Create a canvas for the thumbnail
+            const canvas = document.createElement('canvas');
+            canvas.width = viewport.width;
+            canvas.height = viewport.height;
+            
+            const context = canvas.getContext('2d');
+            if (!context) continue;
+            
+            // Render PDF page to canvas
+            const renderContext = {
+              canvasContext: context,
+              viewport: viewport
+            };
+            
+            await page.render(renderContext).promise;
+            
+            // Convert canvas to data URL
+            const dataUrl = canvas.toDataURL();
+            thumbnailsArray.push(dataUrl);
+          } catch (pageErr) {
+            console.error(`Error generating thumbnail for page ${i}:`, pageErr);
+            // Add a placeholder thumbnail for the failed page
+            thumbnailsArray.push('');
+          }
+          
+          // Update progress
+          updateProgress(i);
+          
+          // Add thumbnails in batches to show loading progress
+          if (isMounted && (i % 3 === 0 || i === pagesToGenerate)) {
+            setPdfThumbnails([...thumbnailsArray]);
+          }
+        }
+        
+        // If component unmounted during async operation, abort
+        if (!isMounted) return;
+        
+        // Final update with all thumbnails
+        setPdfThumbnails(thumbnailsArray);
+        
+        if (thumbnailsArray.some(thumb => thumb !== '')) {
+          toast.success(`Generated previews for ${thumbnailsArray.filter(t => t !== '').length} pages`);
+          
+          // Display toast message for large PDFs to notify about pagination
+          if (thumbnailsArray.length > THUMBNAILS_PER_PAGE) {
+            toast.success(`Showing ${Math.min(thumbnailsArray.length, THUMBNAILS_PER_PAGE)} pages at a time. Use pagination controls to see all ${thumbnailsArray.length} pages.`);
+          }
+        } else {
+          setPreviewError('Failed to generate thumbnails for any pages.');
+        }
+      } catch (err) {
+        // Only update state if component is still mounted
+        if (!isMounted) return;
+        
+        console.error('Error generating thumbnails:', err);
+        const errorMessage = err instanceof Error ? err.message : 'Unknown error';
+        setPreviewError(`Failed to load PDF: ${errorMessage}. This might be due to CORS restrictions.`);
+        toast.error('Failed to generate page thumbnails');
+      } finally {
+        // Only update state if component is still mounted
+        if (isMounted) {
+          setIsPreviewLoading(false);
+          setLoadingThumbnailsProgress(100);
+        }
+      }
+    };
+    
+    generateThumbnails();
+    
+    // Cleanup function to prevent state updates after unmount
+    return () => {
+      isMounted = false;
+    };
+  }, [showPdfPreview, previewPdfDetails]);
+  
+  // Add handler for page selection
+  const handlePageSelection = (pageNum: number) => {
+    if (selectedPages.includes(pageNum)) {
+      // Remove page if already selected
+      setSelectedPages(prev => prev.filter(p => p !== pageNum));
+    } else {
+      // Add page if not already selected
+      setSelectedPages(prev => [...prev, pageNum]);
+    }
+  };
+
+  // Add handler for sending email
+  const handleSendPagesViaEmail = async (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    if (!emailAddress) {
+      setEmailError('Please enter your email address');
+      return;
+    }
+    
+    if (selectedPages.length === 0) {
+      setEmailError('Please select at least one page to send');
+      return;
+    }
+    
+    try {
+      setIsSendingEmail(true);
+      setEmailError(null);
+      
+      // Create request data
+      const requestData = {
+        email: emailAddress,
+        productId: resourceId,
+        pdfUrl: previewPdfDetails?.url,
+        pdfName: previewPdfDetails?.name,
+        selectedPages: selectedPages
+      };
+      
+      // Call API endpoint to process PDF and send email
+      const response = await fetch('/api/send-pdf-pages', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(requestData),
+      });
+      
+      const data = await response.json();
+      
+      if (!response.ok) {
+        throw new Error(data.message || 'Failed to send pages via email');
+      }
+      
+      // Show success message
+      setEmailSent(true);
+      toast.success('PDF pages sent to your email successfully!');
+      
+      // Reset selection after successful email
+      setSelectedPages([]);
+      setEmailAddress('');
+    } catch (err) {
+      console.error('Error sending pages via email:', err);
+      const errorMessage = err instanceof Error ? err.message : 'Unknown error sending email';
+      setEmailError(errorMessage);
+      toast.error(errorMessage);
+    } finally {
+      setIsSendingEmail(false);
+    }
   };
   
   if (loading) {
@@ -863,12 +1259,21 @@ const ResourceDetailPage: React.FC = () => {
                 {hasPdfFiles(product) && (
                   <>
                     {hasPurchased ? (
-                      <Button 
-                        onClick={handleViewPdf}
-                        className="flex items-center justify-center bg-blue-500 hover:bg-blue-600 text-white py-3 rounded-lg"
-                      >
-                        <FileText className="w-5 h-5 mr-2" /> View PDF
-                      </Button>
+                      <div className="flex flex-col space-y-3">
+                        <Button 
+                          onClick={handleViewPdf}
+                          className="flex items-center justify-center bg-blue-500 hover:bg-blue-600 text-white py-3 rounded-lg"
+                        >
+                          <FileText className="w-5 h-5 mr-2" /> View PDF
+                        </Button>
+                        
+                        <Button 
+                          onClick={handlePreviewPages}
+                          className="flex items-center justify-center bg-indigo-500 hover:bg-indigo-600 text-white py-3 rounded-lg"
+                        >
+                          <Layers className="w-5 h-5 mr-2" /> Preview & Select Pages
+                        </Button>
+                      </div>
                     ) : (
                       <div className="flex flex-col items-center bg-gray-100 p-3 rounded-lg">
                         <div className="flex items-center text-gray-600 mb-2">
@@ -1022,34 +1427,62 @@ const ResourceDetailPage: React.FC = () => {
         
         {/* PDF List Modal */}
         {showPdfList && (
-          <div className="fixed inset-0 z-50 bg-black/70 flex items-center justify-center">
-            <div className="bg-white rounded-xl shadow-2xl w-full max-w-md p-6 max-h-[80vh] overflow-auto">
-              <div className="flex justify-between items-center mb-4">
-                <h3 className="text-xl font-bold text-gray-800">Available PDFs</h3>
+          <div className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center overflow-y-auto p-4">
+            <div className="bg-white rounded-lg shadow-xl w-full max-w-lg">
+              <div className="bg-blue-700 text-white px-4 py-3 flex justify-between items-center">
+                <h2 className="text-lg font-semibold">
+                  Select PDF to View
+                </h2>
                 <button 
                   onClick={handleClosePdfList}
-                  className="text-gray-400 hover:text-gray-600 transition-colors"
+                  className="hover:bg-blue-600 p-2 rounded transition-colors"
                 >
-                  <X className="w-6 h-6" />
+                  <X size={20} />
                 </button>
               </div>
-              
-              <div className="space-y-3 mt-4">
-                {availablePdfs.map((pdf, index) => (
-                  <button 
-                    key={index}
-                    onClick={() => handleSelectPdf(pdf)}
-                    className="w-full flex items-center p-3 hover:bg-blue-50 rounded-lg transition-colors group border border-gray-200 hover:border-blue-300"
+              <div className="p-4">
+                <p className="text-gray-600 mb-4">
+                  This resource contains multiple PDF files. Please select one to view:
+                </p>
+                <div className="space-y-2 mb-4">
+                  {availablePdfs.map((pdf, index) => (
+                    <div 
+                      key={index}
+                      className="flex flex-col sm:flex-row sm:items-center justify-between border border-gray-200 p-3 rounded-lg hover:bg-gray-50"
+                    >
+                      <div className="flex items-center mb-2 sm:mb-0">
+                        <FileText className="text-blue-500 mr-3 flex-shrink-0" />
+                        <span className="font-medium text-gray-800 truncate">
+                          {pdf.name}
+                        </span>
+                      </div>
+                      <div className="flex space-x-2 ml-auto">
+                        <button
+                          onClick={() => handleSelectPdfForPreview(pdf, true)}
+                          className="px-3 py-1.5 bg-indigo-500 text-white text-sm rounded hover:bg-indigo-600 transition-colors flex items-center"
+                        >
+                          <Layers className="w-4 h-4 mr-1" />
+                          Preview
+                        </button>
+                        <button
+                          onClick={() => handleSelectPdfForPreview(pdf, false)}
+                          className="px-3 py-1.5 bg-blue-500 text-white text-sm rounded hover:bg-blue-600 transition-colors flex items-center"
+                        >
+                          <FileText className="w-4 h-4 mr-1" />
+                          View
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                <div className="flex justify-end">
+                  <button
+                    onClick={handleClosePdfList}
+                    className="px-4 py-2 bg-gray-200 text-gray-800 rounded hover:bg-gray-300 transition-colors"
                   >
-                    <div className="mr-3 bg-blue-100 text-blue-600 p-2 rounded-lg group-hover:bg-blue-600 group-hover:text-white transition-colors">
-                      <FileText className="w-6 h-6" />
-                    </div>
-                    <div className="text-left">
-                      <p className="font-medium text-gray-800 group-hover:text-blue-700">{pdf.name}</p>
-                      <p className="text-xs text-gray-500">Click to view</p>
-                    </div>
+                    Cancel
                   </button>
-                ))}
+                </div>
               </div>
             </div>
           </div>
@@ -1063,6 +1496,296 @@ const ResourceDetailPage: React.FC = () => {
           onClose={handleClosePdfViewer}
           pdfDetails={pdfDetails}
         />
+      )}
+      
+      {/* PDF Preview Modal */}
+      {showPdfPreview && previewPdfDetails && (
+        <div className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center overflow-y-auto p-4">
+          <div className="bg-white rounded-lg shadow-xl w-full max-w-4xl h-auto max-h-[90vh] flex flex-col">
+            <div className="bg-indigo-700 text-white px-4 py-3 flex justify-between items-center">
+              <div className="flex items-center truncate">
+                <Layers className="mr-2 flex-shrink-0" size={20} />
+                <h2 className="text-lg font-semibold truncate">
+                  Preview: {previewPdfDetails.name}
+                </h2>
+              </div>
+              <div className="flex items-center">
+                <span className="mr-4 text-sm font-medium">
+                  {selectedPages.length} page{selectedPages.length !== 1 ? 's' : ''} selected
+                </span>
+                <button 
+                  onClick={handleClosePdfPreview}
+                  className="hover:bg-indigo-600 p-2 rounded-full transition-colors"
+                >
+                  <X size={20} />
+                </button>
+              </div>
+            </div>
+
+            <div className="flex-1 overflow-auto p-4">
+              {isPreviewLoading && (
+                <div className="flex flex-col items-center justify-center py-16">
+                  <div className="mb-4 relative">
+                    <div className="w-20 h-20 border-4 border-indigo-300 rounded-full"></div>
+                    <div 
+                      className="absolute top-0 left-0 w-20 h-20 border-4 border-t-indigo-600 rounded-full animate-spin"
+                      style={{ 
+                        clipPath: loadingThumbnailsProgress < 100 
+                          ? `polygon(50% 50%, 50% 0%, ${loadingThumbnailsProgress > 0 ? 100 : 50}% 0%, 100% ${loadingThumbnailsProgress}%, 100% 100%, ${100 - loadingThumbnailsProgress}% 100%, 0% ${100 - loadingThumbnailsProgress}%, 0% 0%)`
+                          : 'none'
+                      }}
+                    ></div>
+                    <div className="absolute top-0 left-0 w-20 h-20 flex items-center justify-center text-sm font-semibold text-indigo-700">
+                      {loadingThumbnailsProgress}%
+                    </div>
+                  </div>
+                  <p className="text-gray-700 font-medium">
+                    {loadingThumbnailsProgress === 0 ? 'Loading PDF...' :
+                     loadingThumbnailsProgress < 100 ? `Generating previews (${loadingThumbnailsProgress}%)` :
+                     'Finalizing...'}
+                  </p>
+                  {loadingThumbnailsProgress > 0 && loadingThumbnailsProgress < 100 && (
+                    <p className="text-gray-500 text-sm mt-2">This might take a moment for large documents</p>
+                  )}
+                </div>
+              )}
+
+              {previewError && !isPreviewLoading && (
+                <div className="text-center py-12 px-4">
+                  <AlertTriangle className="mx-auto h-16 w-16 text-amber-500 mb-4" />
+                  <p className="text-lg text-gray-800 font-medium mb-2">Error Loading PDF Preview</p>
+                  <p className="text-gray-600 mb-6 max-w-md mx-auto">{previewError}</p>
+                  <div className="flex justify-center space-x-4">
+                    <Button
+                      onClick={handlePreviewRetry}
+                      className="bg-indigo-500 hover:bg-indigo-600 text-white px-4 py-2 rounded flex items-center"
+                    >
+                      <RefreshCw className="w-4 h-4 mr-2" /> Try Again
+                    </Button>
+                    <Button
+                      onClick={() => {
+                        // Skip preview and go straight to the full PDF viewer
+                        setPdfDetails(previewPdfDetails);
+                        setIsPdfViewerVisible(true);
+                        setShowPdfPreview(false);
+                      }}
+                      className="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded flex items-center"
+                    >
+                      <FileText className="w-4 h-4 mr-2" /> Open Full PDF
+                    </Button>
+                  </div>
+                </div>
+              )}
+
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4 mt-4">
+                {pdfThumbnails
+                  .slice(
+                    (currentThumbnailPage - 1) * THUMBNAILS_PER_PAGE,
+                    currentThumbnailPage * THUMBNAILS_PER_PAGE
+                  )
+                  .map((thumbnail, index) => {
+                  const pageNum = index + 1 + ((currentThumbnailPage - 1) * THUMBNAILS_PER_PAGE);
+                  const isSelected = selectedPages.includes(pageNum);
+                  return (
+                    <div 
+                      key={index}
+                      className={`cursor-pointer rounded-lg overflow-hidden border-2 
+                        ${selectedPreviewPage === pageNum 
+                          ? 'border-blue-500 ring-2 ring-blue-300' 
+                          : isSelected
+                            ? 'border-green-500 ring-2 ring-green-300'
+                            : 'border-gray-200 hover:border-indigo-500'} 
+                        transition-colors hover:shadow-md relative`}
+                      data-page={pageNum}
+                      aria-label={`Preview page ${pageNum}`}
+                    >
+                      {/* Page selection checkbox */}
+                      <div 
+                        className="absolute top-2 right-2 z-10 bg-white rounded-full p-1 shadow-md"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handlePageSelection(pageNum);
+                        }}
+                      >
+                        <div className={`w-5 h-5 rounded-sm flex items-center justify-center ${isSelected ? 'bg-green-500' : 'border-2 border-gray-300'}`}>
+                          {isSelected && <Check className="w-4 h-4 text-white" />}
+                        </div>
+                      </div>
+
+                      {/* Page thumbnail */}
+                      <div 
+                        className="aspect-w-3 aspect-h-4 bg-gray-50"
+                        onClick={() => handleThumbnailClick(pageNum)}
+                      >
+                        {thumbnail ? (
+                          <img 
+                            src={thumbnail} 
+                            alt={`Page ${pageNum}`} 
+                            className="object-contain w-full"
+                            loading="lazy"
+                          />
+                        ) : (
+                          <div className="flex items-center justify-center h-full bg-gray-100">
+                            <span className="text-gray-400 text-sm">Page {pageNum}</span>
+                          </div>
+                        )}
+                        {selectedPreviewPage === pageNum && isNavigating && (
+                          <div className="absolute inset-0 bg-blue-500/20 flex items-center justify-center">
+                            <div className="bg-blue-500 text-white rounded-full p-1 animate-pulse">
+                              <FileText className="w-6 h-6" />
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                      <div className="text-xs text-center py-2 bg-gray-100 font-medium">
+                        Page {pageNum}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* Pagination controls */}
+              {pdfThumbnails.length > THUMBNAILS_PER_PAGE && (
+                <div className="flex justify-center items-center mt-6 space-x-2">
+                  <button
+                    onClick={() => setCurrentThumbnailPage(prev => Math.max(prev - 1, 1))}
+                    disabled={currentThumbnailPage === 1}
+                    className={`px-3 py-1 rounded ${
+                      currentThumbnailPage === 1
+                        ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                        : 'bg-indigo-100 text-indigo-700 hover:bg-indigo-200'
+                    }`}
+                  >
+                    Previous
+                  </button>
+                  
+                  <span className="text-sm text-gray-600">
+                    Page {currentThumbnailPage} of {Math.ceil(pdfThumbnails.length / THUMBNAILS_PER_PAGE)}
+                  </span>
+                  
+                  <button
+                    onClick={() => setCurrentThumbnailPage(prev => 
+                      Math.min(prev + 1, Math.ceil(pdfThumbnails.length / THUMBNAILS_PER_PAGE))
+                    )}
+                    disabled={currentThumbnailPage === Math.ceil(pdfThumbnails.length / THUMBNAILS_PER_PAGE)}
+                    className={`px-3 py-1 rounded ${
+                      currentThumbnailPage === Math.ceil(pdfThumbnails.length / THUMBNAILS_PER_PAGE)
+                        ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                        : 'bg-indigo-100 text-indigo-700 hover:bg-indigo-200'
+                    }`}
+                  >
+                    Next
+                  </button>
+                </div>
+              )}
+
+              {!isPreviewLoading && !previewError && pdfThumbnails.length === 0 && (
+                <div className="text-center py-16">
+                  <FileText className="mx-auto h-16 w-16 text-gray-400 mb-4" />
+                  <p className="text-lg text-gray-700">No thumbnails available</p>
+                  <p className="text-gray-500 mt-2">Try viewing the full PDF instead</p>
+                </div>
+              )}
+
+              {/* Email form section */}
+              {!isPreviewLoading && !previewError && pdfThumbnails.length > 0 && (
+                <div className="mt-8 border-t border-gray-200 pt-6">
+                  <form onSubmit={handleSendPagesViaEmail} className="space-y-4">
+                    <div>
+                      <h3 className="text-lg font-medium text-gray-900 mb-4">Send selected pages to your email</h3>
+                      {selectedPages.length > 0 ? (
+                        <div className="mb-3 bg-green-50 p-3 rounded-md">
+                          <p className="text-green-800 text-sm">
+                            <Check className="w-4 h-4 inline-block mr-1" />
+                            {selectedPages.length} page{selectedPages.length !== 1 ? 's' : ''} selected: 
+                            {' '}{selectedPages.sort((a, b) => a - b).join(', ')}
+                          </p>
+                        </div>
+                      ) : (
+                        <div className="mb-3 bg-yellow-50 p-3 rounded-md">
+                          <p className="text-yellow-800 text-sm">
+                            <Info className="w-4 h-4 inline-block mr-1" />
+                            Select pages by clicking the checkbox on each thumbnail
+                          </p>
+                        </div>
+                      )}
+                      
+                      <div className="flex flex-col sm:flex-row gap-4">
+                        <div className="flex-grow">
+                          <label htmlFor="email" className="sr-only">Email address</label>
+                          <input
+                            type="email"
+                            id="email"
+                            name="email"
+                            value={emailAddress}
+                            onChange={(e) => setEmailAddress(e.target.value)}
+                            placeholder="Your email address"
+                            className="shadow-sm block w-full border-gray-300 rounded-md focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                            required
+                          />
+                        </div>
+                        <button
+                          type="submit"
+                          disabled={isSendingEmail || selectedPages.length === 0}
+                          className={`px-4 py-2 border rounded-md flex items-center justify-center ${
+                            isSendingEmail || selectedPages.length === 0
+                              ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                              : 'bg-green-600 hover:bg-green-700 text-white'
+                          }`}
+                        >
+                          {isSendingEmail ? (
+                            <>
+                              <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                              Sending...
+                            </>
+                          ) : (
+                            <>
+                              <svg 
+                                xmlns="http://www.w3.org/2000/svg" 
+                                className="h-4 w-4 mr-2" 
+                                fill="none" 
+                                viewBox="0 0 24 24" 
+                                stroke="currentColor"
+                              >
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                              </svg>
+                              Send to Email
+                            </>
+                          )}
+                        </button>
+                      </div>
+                      {emailError && (
+                        <p className="mt-2 text-sm text-red-600">{emailError}</p>
+                      )}
+                      {emailSent && (
+                        <p className="mt-2 text-sm text-green-600">
+                          <CheckCircle className="w-4 h-4 inline-block mr-1" />
+                          Pages sent successfully! Check your inbox.
+                        </p>
+                      )}
+                    </div>
+                  </form>
+                </div>
+              )}
+            </div>
+
+            <div className="bg-gray-100 px-4 py-3 flex justify-between items-center border-t">
+              <div className="flex items-center">
+                <span className="text-sm text-gray-600 mr-4">
+                  <Info className="w-4 h-4 inline mr-1 text-blue-500" />
+                  Click thumbnail to view page, check box to select for email
+                </span>
+              </div>
+              <Button
+                onClick={handleClosePdfPreview}
+                className="bg-gray-200 hover:bg-gray-300 text-gray-800 px-4 py-2 rounded"
+              >
+                Close Preview
+              </Button>
+            </div>
+          </div>
+        </div>
       )}
       
       <Footer />

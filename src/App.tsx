@@ -24,6 +24,7 @@ import ThankYouPage from './components/ThankYouPage'
 import BookmarksPage from './components/BookmarksPage'
 import TermsOfUsePage from './components/TermsOfUsePage'
 import ApiTestPage from './components/ApiTestPage'
+import ResourceFinder from './components/ResourceFinder'
 import SessionManager from './components/SessionManager'
 
 // Error boundary component to catch errors
@@ -97,6 +98,7 @@ const AppContent: React.FC = () => {
           <Route path="/settings" element={<UserSettingsPage />} />
           <Route path="/thankyou" element={<ThankYouPage />} />
           <Route path="/bookmarks" element={<BookmarksPage />} />
+          <Route path="/resource-finder" element={<ResourceFinder />} />
           <Route path="/api-test" element={<ApiTestPage />} />
         </Routes>
       </Suspense>

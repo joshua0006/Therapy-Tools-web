@@ -1,35 +1,23 @@
 import type { Request, Response } from 'express';
 import fetch from 'node-fetch';
-import { getFirestore } from 'firebase/firestore';
-import { app } from '../lib/firebase';
 
 /**
  * PDF Proxy API endpoint
  * 
- * This endpoint acts as a secure proxy for PDF files.
- * Instead of providing direct download links to PDFs that users could save,
- * we retrieve the PDF through the server and pipe it to the client.
- * 
- * Security features:
- * 1. Validates user authentication
- * 2. Verifies user has access to the requested PDF
- * 3. Sets headers to discourage downloading
- * 4. Doesn't expose the original source URL
+ * This endpoint acts as a secure proxy for PDF files to avoid CORS issues.
+ * It fetches the PDF from the source URL and returns it to the client.
  */
 export default async function handler(req: Request, res: Response) {
   try {
-    // Get the PDF URL and auth token from query parameters
-    const { url, auth } = req.query;
+    // Get the PDF URL from query parameters
+    const { url } = req.query;
 
     // Validate required parameters
-    if (!url || !auth) {
-      return res.status(400).json({ error: 'Missing required parameters' });
+    if (!url) {
+      return res.status(400).json({ error: 'Missing URL parameter' });
     }
 
-    // Validate user is authenticated
-    if (!auth) {
-      return res.status(401).json({ error: 'Authentication required' });
-    }
+    console.log(`Proxying PDF request for: ${url}`);
 
     // Fetch the PDF from the source URL
     const response = await fetch(String(url));
@@ -45,21 +33,15 @@ export default async function handler(req: Request, res: Response) {
     const contentType = response.headers.get('content-type') || 'application/pdf';
     const contentLength = response.headers.get('content-length');
     
-    // Set headers to discourage saving the file
+    // Set access control headers to allow CORS
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Allow-Methods', 'GET');
+    
+    // Set headers for the PDF
     res.setHeader('Content-Type', contentType);
     if (contentLength) {
       res.setHeader('Content-Length', contentLength);
     }
-    res.setHeader('Content-Disposition', 'inline');
-    res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
-    res.setHeader('Pragma', 'no-cache');
-    res.setHeader('Expires', '0');
-    res.setHeader('Surrogate-Control', 'no-store');
-    
-    // Additional security headers
-    res.setHeader('X-Content-Type-Options', 'nosniff');
-    res.setHeader('X-Frame-Options', 'DENY');
-    res.setHeader('X-XSS-Protection', '1; mode=block');
     
     // Stream the PDF data to the client
     const arrayBuffer = await response.arrayBuffer();

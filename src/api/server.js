@@ -11,6 +11,8 @@ dotenv.config();
 const stripeHandlers = require('./stripe-handlers');
 const paypalHandlers = require('./paypal-handlers');
 const paymentSuccessHandlers = require('./payment-success');
+// Import PDF page email handler
+const sendPdfPagesHandler = require('./send-pdf-pages');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -41,6 +43,8 @@ app.post('/api/capture-paypal-order', paypalHandlers.captureOrder);
 // Verification endpoint
 app.post('/api/verify-payment', paymentSuccessHandlers.verifyPaymentStatus);
 
+// PDF pages email endpoint
+app.post('/api/send-pdf-pages', sendPdfPagesHandler);
 
 
 module.exports = app; 

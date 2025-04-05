@@ -132,3 +132,102 @@ export default tseslint.config({
   },
 })
 ```
+
+# Therapy Tools Web Platform
+
+This repository contains the code for the Therapy Tools web platform, a digital marketplace for speech and language therapy resources.
+
+## Features
+
+- Product catalog with search and filtering
+- Secure PDF viewer with access control
+- User authentication and account management
+- Bookmark functionality for saving resources
+- Subscription management
+- Payment processing via Stripe and PayPal
+- PDF page extraction and email feature
+
+## PDF Page Extraction and Email Feature
+
+The platform includes functionality to:
+
+1. **Preview PDF documents** with thumbnail generation
+2. **Select specific pages** for extraction using checkboxes
+3. **Send selected pages as images** directly to user's email
+
+This feature uses:
+- pdf2pic: For converting PDF pages to images
+- nodemailer: For sending emails with attachments
+- Custom API endpoint: `/api/send-pdf-pages`
+
+### How to Use
+
+1. Navigate to a PDF resource
+2. Click on "Preview & Select Pages"
+3. Use checkboxes to select pages you want to extract
+4. Enter your email address
+5. Click "Send to Email"
+6. The selected pages will be sent as image attachments to your email
+
+### Configuration
+
+Email sending settings can be configured using environment variables:
+
+```
+SMTP_HOST=your-smtp-server.com
+SMTP_PORT=587
+SMTP_SECURE=false
+SMTP_USER=your-username
+SMTP_PASS=your-password
+EMAIL_FROM=noreply@example.com
+```
+
+## Development
+
+### Prerequisites
+
+- Node.js (v14+)
+- npm or yarn
+- Firebase account
+- SMTP server for email functionality
+
+### Installation
+
+```bash
+# Clone the repository
+git clone https://github.com/your-username/therapy-tools-web.git
+
+# Install dependencies
+npm install
+
+# Start development server
+npm run dev
+```
+
+### Environment Variables
+
+Create a `.env` file in the root directory with:
+
+```
+# Firebase configuration
+FIREBASE_API_KEY=your-api-key
+FIREBASE_AUTH_DOMAIN=your-auth-domain
+FIREBASE_PROJECT_ID=your-project-id
+FIREBASE_STORAGE_BUCKET=your-storage-bucket
+FIREBASE_MESSAGING_SENDER_ID=your-messaging-sender-id
+FIREBASE_APP_ID=your-app-id
+
+# Payment configuration
+STRIPE_PUBLIC_KEY=your-stripe-public-key
+STRIPE_SECRET_KEY=your-stripe-secret-key
+PAYPAL_CLIENT_ID=your-paypal-client-id
+PAYPAL_CLIENT_SECRET=your-paypal-client-secret
+
+# Email configuration
+SMTP_HOST=your-smtp-server
+SMTP_PORT=587
+SMTP_SECURE=false
+SMTP_USER=your-email-username
+SMTP_PASS=your-email-password
+EMAIL_FROM=noreply@example.com
+```
