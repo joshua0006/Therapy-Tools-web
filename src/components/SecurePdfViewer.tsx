@@ -1310,7 +1310,7 @@ const SecurePdfViewer: React.FC<SecurePdfViewerProps> = ({ productId, onClose, p
               <div className="absolute inset-0 flex items-center justify-center bg-gray-900/80 z-10 backdrop-blur-sm">
                 <div className="bg-white p-8 rounded-lg shadow-lg flex flex-col items-center">
                   <div className="w-16 h-16 border-4 border-t-indigo-600 border-indigo-300 rounded-full animate-spin mb-4"></div>
-                  <p className="text-gray-700 font-medium">Loading document{retryCount > 0 ? ` (Attempt ${retryCount}/${maxRetries})` : ''}...</p>
+                  <p className="text-gray-700 font-medium">Loading document ...</p>
                 </div>
               </div>
             )}

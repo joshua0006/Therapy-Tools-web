@@ -1428,7 +1428,7 @@ const ResourceDetailPage: React.FC = () => {
         {/* PDF List Modal */}
         {showPdfList && (
           <div className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center overflow-y-auto p-4">
-            <div className="bg-white rounded-lg shadow-xl w-full max-w-lg">
+            <div className="bg-white rounded-lg shadow-xl w-full max-w-xl">
               <div className="bg-blue-700 text-white px-4 py-3 flex justify-between items-center">
                 <h2 className="text-lg font-semibold">
                   Select PDF to View
@@ -1444,29 +1444,29 @@ const ResourceDetailPage: React.FC = () => {
                 <p className="text-gray-600 mb-4">
                   This resource contains multiple PDF files. Please select one to view:
                 </p>
-                <div className="space-y-2 mb-4">
+                <div className="space-y-3 mb-4">
                   {availablePdfs.map((pdf, index) => (
                     <div 
                       key={index}
-                      className="flex flex-col sm:flex-row sm:items-center justify-between border border-gray-200 p-3 rounded-lg hover:bg-gray-50"
+                      className="flex flex-col sm:flex-row sm:items-center border border-gray-200 p-4 rounded-lg hover:bg-gray-50"
                     >
-                      <div className="flex items-center mb-2 sm:mb-0">
+                      <div className="flex items-center mb-3 sm:mb-0 flex-grow min-w-0 pr-4">
                         <FileText className="text-blue-500 mr-3 flex-shrink-0" />
-                        <span className="font-medium text-gray-800 truncate">
+                        <span className="font-medium text-gray-800 truncate max-w-full">
                           {pdf.name}
                         </span>
                       </div>
-                      <div className="flex space-x-2 ml-auto">
+                      <div className="flex space-x-3 sm:flex-shrink-0">
                         <button
                           onClick={() => handleSelectPdfForPreview(pdf, true)}
-                          className="px-3 py-1.5 bg-indigo-500 text-white text-sm rounded hover:bg-indigo-600 transition-colors flex items-center"
+                          className="px-4 py-2 bg-indigo-500 text-white text-sm rounded hover:bg-indigo-600 transition-colors flex items-center"
                         >
                           <Layers className="w-4 h-4 mr-1" />
                           Preview
                         </button>
                         <button
                           onClick={() => handleSelectPdfForPreview(pdf, false)}
-                          className="px-3 py-1.5 bg-blue-500 text-white text-sm rounded hover:bg-blue-600 transition-colors flex items-center"
+                          className="px-4 py-2 bg-blue-500 text-white text-sm rounded hover:bg-blue-600 transition-colors flex items-center"
                         >
                           <FileText className="w-4 h-4 mr-1" />
                           View
