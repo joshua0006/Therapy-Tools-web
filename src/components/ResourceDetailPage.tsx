@@ -10,6 +10,8 @@ import { getFirestore, doc, getDoc, collection, query, where, getDocs, setDoc, a
 import { app } from '../lib/firebase';
 import SecurePdfViewer from './SecurePdfViewer';
 import { fetchPdfAsArrayBuffer, getProxiedPdfUrl } from '../services/pdfService';
+import { fetchApi } from '../utils/api-config';
+import { sendPdfPagesViaEmail, checkApiServerStatus } from '../services/emailService';
 
 // Add PDF.js type declarations
 declare global {
@@ -169,6 +171,9 @@ const ResourceDetailPage: React.FC = () => {
   const [isSendingEmail, setIsSendingEmail] = useState(false);
   const [emailSent, setEmailSent] = useState(false);
   const [emailError, setEmailError] = useState<string | null>(null);
+  
+  // Add new state variable for API server status
+  const [isApiServerAvailable, setIsApiServerAvailable] = useState<boolean | null>(null);
   
   // Create Firestore instance directly
   const db = getFirestore(app);
@@ -1000,6 +1005,31 @@ const ResourceDetailPage: React.FC = () => {
     }
   };
 
+  // Add useEffect to check API server status
+  useEffect(() => {
+    if (showPdfPreview && !isApiServerAvailable) {
+      const checkServerStatus = async () => {
+        try {
+          const isAvailable = await checkApiServerStatus();
+          setIsApiServerAvailable(isAvailable);
+          
+          if (!isAvailable) {
+            console.warn('API server is not available. Email functionality will not work.');
+            toast.error('Email server is not available. You can view pages but cannot send them via email.', { 
+              duration: 5000,
+              id: 'api-server-warning'
+            });
+          }
+        } catch (error) {
+          console.error('Failed to check API server status:', error);
+          setIsApiServerAvailable(false);
+        }
+      };
+      
+      checkServerStatus();
+    }
+  }, [showPdfPreview]);
+
   // Add handler for sending email
   const handleSendPagesViaEmail = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -1013,38 +1043,57 @@ const ResourceDetailPage: React.FC = () => {
       setEmailError('Please select at least one page to send');
       return;
     }
+
+    // First check if the API server is available
+    if (isApiServerAvailable === false) {
+      setEmailError('Email server is not available. Please try again later.');
+      toast.error('Email server is not accessible. Please ensure the API server is running.', { duration: 5000 });
+      return;
+    }
     
     try {
       setIsSendingEmail(true);
       setEmailError(null);
       
-      // Create request data
-      const requestData = {
-        email: emailAddress,
-        productId: resourceId,
-        pdfUrl: previewPdfDetails?.url,
-        pdfName: previewPdfDetails?.name,
-        selectedPages: selectedPages
-      };
+      // Make sure PDF details are available
+      if (!previewPdfDetails?.url) {
+        console.warn('PDF URL is missing, cannot send email');
+        toast.error('Unable to access PDF. Please try again later.');
+        return;
+      }
       
-      // Call API endpoint to process PDF and send email
-      const response = await fetch('/api/send-pdf-pages', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(requestData),
-      });
+      // Don't send thumbnails - let the server generate high-quality images
+      toast.success('Preparing high-quality images for your email...', { duration: 3000 });
       
-      const data = await response.json();
+      // Use our email service instead of direct API call without sending thumbnails
+      const result = await sendPdfPagesViaEmail(
+        emailAddress,
+        resourceId || '',
+        previewPdfDetails?.url,
+        previewPdfDetails?.name,
+        selectedPages,
+        [] // Empty array - don't send thumbnails, let server generate high-quality images
+      );
       
-      if (!response.ok) {
-        throw new Error(data.message || 'Failed to send pages via email');
+      if (!result.success) {
+        // Show a more specific error message if it's a server connection issue
+        if (result.message.includes('Unable to connect to email server')) {
+          toast.error('Failed to connect to email server. Please check if the API server is running.', {
+            duration: 5000
+          });
+          console.error('API server connection failed. Make sure the server is running on port 3002.');
+          setEmailError('API server not available. Please try again later or contact support.');
+          // Update the server status state
+          setIsApiServerAvailable(false);
+        } else {
+          throw new Error(result.message || 'Failed to send pages via email');
+        }
+        return;
       }
       
       // Show success message
       setEmailSent(true);
-      toast.success('PDF pages sent to your email successfully!');
+      toast.success('PDF pages sent with high-quality images to your email successfully!');
       
       // Reset selection after successful email
       setSelectedPages([]);
@@ -1247,7 +1296,9 @@ const ResourceDetailPage: React.FC = () => {
                       >
                         <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"></path>
                       </svg>
-                      Bookmarked
+                      <p className="text-blue-700">
+                        Bookmarked
+                      </p>
                     </>
                   ) : (
                     <>
@@ -1269,7 +1320,7 @@ const ResourceDetailPage: React.FC = () => {
                         
                         <Button 
                           onClick={handlePreviewPages}
-                          className="flex items-center justify-center bg-indigo-500 hover:bg-indigo-600 text-white py-3 rounded-lg"
+                          className="flex items-center justify-center bg-green-500 hover:bg-green-600 text-white py-3 rounded-lg"
                         >
                           <Layers className="w-5 h-5 mr-2" /> Preview & Select Pages
                         </Button>
@@ -1501,7 +1552,7 @@ const ResourceDetailPage: React.FC = () => {
       {/* PDF Preview Modal */}
       {showPdfPreview && previewPdfDetails && (
         <div className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center overflow-y-auto p-4">
-          <div className="bg-white rounded-lg shadow-xl w-full max-w-4xl h-auto max-h-[90vh] flex flex-col">
+          <div className="bg-white rounded-lg shadow-xl w-full max-w-8xl h-auto max-h-[90vh] flex flex-col">
             <div className="bg-indigo-700 text-white px-4 py-3 flex justify-between items-center">
               <div className="flex items-center truncate">
                 <Layers className="mr-2 flex-shrink-0" size={20} />
@@ -1687,103 +1738,102 @@ const ResourceDetailPage: React.FC = () => {
                   <p className="text-gray-500 mt-2">Try viewing the full PDF instead</p>
                 </div>
               )}
+            </div>
 
-              {/* Email form section */}
-              {!isPreviewLoading && !previewError && pdfThumbnails.length > 0 && (
-                <div className="mt-8 border-t border-gray-200 pt-6">
-                  <form onSubmit={handleSendPagesViaEmail} className="space-y-4">
-                    <div>
-                      <h3 className="text-lg font-medium text-gray-900 mb-4">Send selected pages to your email</h3>
-                      {selectedPages.length > 0 ? (
-                        <div className="mb-3 bg-green-50 p-3 rounded-md">
-                          <p className="text-green-800 text-sm">
-                            <Check className="w-4 h-4 inline-block mr-1" />
-                            {selectedPages.length} page{selectedPages.length !== 1 ? 's' : ''} selected: 
-                            {' '}{selectedPages.sort((a, b) => a - b).join(', ')}
-                          </p>
-                        </div>
-                      ) : (
-                        <div className="mb-3 bg-yellow-50 p-3 rounded-md">
-                          <p className="text-yellow-800 text-sm">
-                            <Info className="w-4 h-4 inline-block mr-1" />
-                            Select pages by clicking the checkbox on each thumbnail
-                          </p>
-                        </div>
-                      )}
-                      
-                      <div className="flex flex-col sm:flex-row gap-4">
-                        <div className="flex-grow">
-                          <label htmlFor="email" className="sr-only">Email address</label>
-                          <input
-                            type="email"
-                            id="email"
-                            name="email"
-                            value={emailAddress}
-                            onChange={(e) => setEmailAddress(e.target.value)}
-                            placeholder="Your email address"
-                            className="shadow-sm block w-full border-gray-300 rounded-md focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
-                            required
-                          />
-                        </div>
-                        <button
-                          type="submit"
-                          disabled={isSendingEmail || selectedPages.length === 0}
-                          className={`px-4 py-2 border rounded-md flex items-center justify-center ${
-                            isSendingEmail || selectedPages.length === 0
-                              ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
-                              : 'bg-green-600 hover:bg-green-700 text-white'
-                          }`}
-                        >
-                          {isSendingEmail ? (
-                            <>
-                              <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                              Sending...
-                            </>
-                          ) : (
-                            <>
-                              <svg 
-                                xmlns="http://www.w3.org/2000/svg" 
-                                className="h-4 w-4 mr-2" 
-                                fill="none" 
-                                viewBox="0 0 24 24" 
-                                stroke="currentColor"
-                              >
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
-                              </svg>
-                              Send to Email
-                            </>
-                          )}
-                        </button>
-                      </div>
-                      {emailError && (
-                        <p className="mt-2 text-sm text-red-600">{emailError}</p>
-                      )}
-                      {emailSent && (
-                        <p className="mt-2 text-sm text-green-600">
-                          <CheckCircle className="w-4 h-4 inline-block mr-1" />
-                          Pages sent successfully! Check your inbox.
+            {/* Email form section - moved outside of content area to fix position at bottom */}
+            {!isPreviewLoading && !previewError && pdfThumbnails.length > 0 && (
+              <div className="border-t border-gray-200 bg-gray-50 px-4 py-4">
+                <form onSubmit={handleSendPagesViaEmail} className="space-y-4">
+                  <div>
+                    <h3 className="text-lg font-medium text-gray-900 mb-4">Send selected pages to your email</h3>
+                    
+                    {/* Add API server status warning */}
+                    {isApiServerAvailable === false && (
+                      <div className="mb-3 bg-red-50 p-3 rounded-md">
+                        <p className="text-red-800 text-sm flex items-center">
+                          <AlertTriangle className="w-4 h-4 inline-block mr-1" />
+                          Email server is not available. You can view pages but cannot send them via email.
                         </p>
-                      )}
+                      </div>
+                    )}
+                    
+                    {selectedPages.length > 0 ? (
+                      <div className="mb-3 bg-green-50 p-3 rounded-md">
+                        <p className="text-green-800 text-sm">
+                          <Check className="w-4 h-4 inline-block mr-1" />
+                          {selectedPages.length} page{selectedPages.length !== 1 ? 's' : ''} selected: 
+                          {' '}{selectedPages.sort((a, b) => a - b).join(', ')}
+                        </p>
+                        
+                      </div>
+                    ) : (
+                      <div className="mb-3 bg-yellow-50 p-3 rounded-md">
+                        <p className="text-yellow-800 text-sm">
+                          <Info className="w-4 h-4 inline-block mr-1" />
+                          Select pages by clicking the checkbox on each thumbnail
+                        </p>
+                      </div>
+                    )}
+                    
+                    <div className="flex flex-col justify-center items-center sm:flex-row gap-4">
+                      <div className="flex-grow">
+                        <label htmlFor="email" className="sr-only">Email address</label>
+                        <input
+                          type="email"
+                          id="email"
+                          name="email"
+                          value={emailAddress}
+                          onChange={(e) => setEmailAddress(e.target.value)}
+                          placeholder="Your email address"
+                          className="shadow-sm block w-full border-gray-300 rounded-md focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm py-2 px-4" // Added py-2 px-4
+                          required
+                        />
+                      </div>
+                      <button
+                        type="submit"
+                        disabled={isSendingEmail || selectedPages.length === 0}
+                        className={`px-4 py-2 border rounded-md flex items-center justify-center ${
+                          isSendingEmail || selectedPages.length === 0
+                            ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                            : 'bg-green-600 hover:bg-green-700 text-white'
+                        }`}
+                      >
+                        {isSendingEmail ? (
+                          <>
+                            <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                            Sending...
+                          </>
+                        ) : (
+                          <>
+                            <svg 
+                              xmlns="http://www.w3.org/2000/svg" 
+                              className="h-4 w-4 mr-2" 
+                              fill="none" 
+                              viewBox="0 0 24 24" 
+                              stroke="currentColor"
+                            >
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                            </svg>
+                            Send to Email
+                          </>
+                        )}
+                      </button>
                     </div>
-                  </form>
-                </div>
-              )}
-            </div>
-
-            <div className="bg-gray-100 px-4 py-3 flex justify-between items-center border-t">
-              <div className="flex items-center">
-                <span className="text-sm text-gray-600 mr-4">
-                  <Info className="w-4 h-4 inline mr-1 text-blue-500" />
-                  Click thumbnail to view page, check box to select for email
-                </span>
+                    {emailError && (
+                      <p className="mt-2 text-sm text-red-600">{emailError}</p>
+                    )}
+                    {emailSent && (
+                      <p className="mt-2 text-sm text-green-600">
+                        <CheckCircle className="w-4 h-4 inline-block mr-1" />
+                        Pages sent successfully! Check your inbox.
+                      </p>
+                    )}
+                  </div>
+                </form>
               </div>
-              <Button
-                onClick={handleClosePdfPreview}
-                className="bg-gray-200 hover:bg-gray-300 text-gray-800 px-4 py-2 rounded"
-              >
-                Close Preview
-              </Button>
-            </div>
+            )}
+
+           
           </div>
         </div>
       )}
