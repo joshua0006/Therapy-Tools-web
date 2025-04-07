@@ -4,13 +4,18 @@
  * This service provides functionality to send emails.
  */
 
+// Use environment variables for API URL or default to relative URL in production
+const API_URL = import.meta.env.DEV 
+  ? 'http://localhost:3002' 
+  : '';
+
 /**
  * Checks if the API server is running and available
  * @returns A promise that resolves to a boolean indicating if the server is available
  */
 export async function checkApiServerStatus(): Promise<boolean> {
   try {
-    const response = await fetch('http://localhost:3002/api/send-pdf-pages', {
+    const response = await fetch(`${API_URL}/api/send-pdf-pages`, {
       method: 'OPTIONS',
       headers: {
         'Content-Type': 'application/json',
@@ -58,7 +63,7 @@ export async function sendPdfPagesViaEmail(
     }
     
     // Send via the API server
-    const response = await fetch('http://localhost:3002/api/send-pdf-pages', {
+    const response = await fetch(`${API_URL}/api/send-pdf-pages`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
