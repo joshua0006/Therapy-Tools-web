@@ -5,7 +5,7 @@ const nodemailer = require('nodemailer');
 exports.handler = async (event, context) => {
   // Set CORS headers for all responses
   const headers = {
-    'Access-Control-Allow-Origin': 'https://therapytools.netlify.app',
+    'Access-Control-Allow-Origin': '*',
     'Access-Control-Allow-Headers': 'Content-Type, Authorization, Origin, Accept',
     'Access-Control-Allow-Methods': 'POST, OPTIONS',
     'Access-Control-Allow-Credentials': 'true'
