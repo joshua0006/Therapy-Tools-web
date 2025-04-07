@@ -7,7 +7,7 @@
 // Use environment variables for API URL or default to relative URL in production
 const API_URL = import.meta.env.DEV 
   ? 'http://localhost:3002' 
-  : '';
+  : '/.netlify/functions';
 
 /**
  * Checks if the API server is running and available
@@ -15,7 +15,11 @@ const API_URL = import.meta.env.DEV
  */
 export async function checkApiServerStatus(): Promise<boolean> {
   try {
-    const response = await fetch(`${API_URL}/api/send-pdf-pages`, {
+    const endpoint = import.meta.env.DEV
+      ? `${API_URL}/api/send-pdf-pages`
+      : `${API_URL}/send-pdf-pages`;
+      
+    const response = await fetch(endpoint, {
       method: 'OPTIONS',
       headers: {
         'Content-Type': 'application/json',
@@ -62,8 +66,13 @@ export async function sendPdfPagesViaEmail(
       throw new TypeError('Failed to fetch: API server is not running or unavailable');
     }
     
+    // Determine the correct endpoint based on environment
+    const endpoint = import.meta.env.DEV
+      ? `${API_URL}/api/send-pdf-pages`
+      : `${API_URL}/send-pdf-pages`;
+    
     // Send via the API server
-    const response = await fetch(`${API_URL}/api/send-pdf-pages`, {
+    const response = await fetch(endpoint, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
