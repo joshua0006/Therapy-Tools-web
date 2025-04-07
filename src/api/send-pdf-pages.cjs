@@ -20,9 +20,26 @@ const { app, db } = require('./firebase.cjs');
  */
 async function handler(req, res) {
   // Set CORS headers for preflight requests
-  res.setHeader('Access-Control-Allow-Origin', '*');
+  const allowedOrigins = [
+    'http://localhost:3000', 
+    'http://localhost:3001', 
+    'http://localhost:5173', 
+    'http://localhost:5174', 
+    'http://localhost:5175',
+    'https://therapytools.netlify.app', 
+    'https://therapytools.netlify.com'
+  ];
+  
+  const origin = req.headers.origin;
+  if (allowedOrigins.includes(origin)) {
+    res.setHeader('Access-Control-Allow-Origin', origin);
+  } else {
+    res.setHeader('Access-Control-Allow-Origin', '*');
+  }
+  
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, Origin, Accept');
+  res.setHeader('Access-Control-Allow-Credentials', 'true');
   
   // Handle OPTIONS request (preflight)
   if (req.method === 'OPTIONS') {

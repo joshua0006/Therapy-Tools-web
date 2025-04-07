@@ -1,0 +1,9 @@
+{
+  "name": "therapy-tools-api-functions",
+  "version": "1.0.0",
+  "description": "Serverless functions for Therapy Tools API",
+  "main": "send-pdf-pages.js",
+  "dependencies": {
+    "nodemailer": "^6.9.1"
+  }
+} 

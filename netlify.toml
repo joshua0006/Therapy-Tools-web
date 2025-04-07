@@ -1,7 +1,19 @@
 [build]
   command = "npm run build"
   publish = "dist"
+  functions = "netlify/functions"
 
+[dev]
+  command = "npm run dev"
+
+# API endpoint redirects
+[[redirects]]
+  from = "/api/*"
+  to = "/.netlify/functions/:splat"
+  status = 200
+  force = true
+
+# SPA redirect (must be last)
 [[redirects]]
   from = "/*"
   to = "/index.html"
