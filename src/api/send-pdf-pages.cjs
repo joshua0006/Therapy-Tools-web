@@ -1,15 +1,13 @@
-// API endpoint for sending PDF page images via email
-import fetch from 'node-fetch';
-import nodemailer from 'nodemailer';
-import { fromPath } from 'pdf2pic';
-import fs from 'fs';
-import path from 'path';
-import os from 'os';
-import { v4 as uuidv4 } from 'uuid';
-import { doc, setDoc } from 'firebase/firestore';
-// Import firebase from our CommonJS wrapper
-import * as firebaseModule from './firebase.cjs';
-const { app, db } = firebaseModule;
+// API endpoint for sending PDF page images via email (CommonJS version)
+const fetch = require('node-fetch');
+const nodemailer = require('nodemailer');
+const { fromPath } = require('pdf2pic');
+const fs = require('fs');
+const path = require('path');
+const os = require('os');
+const { v4: uuidv4 } = require('uuid');
+const { doc, setDoc } = require('firebase/firestore');
+const { app, db } = require('./firebase.cjs');
 
 /**
  * Processes PDF pages and sends them via email
@@ -20,7 +18,7 @@ const { app, db } = firebaseModule;
  * 3. Sends the images as email attachments to the provided email address
  * 4. Creates a unique link for viewing selected pages online
  */
-export default async function handler(req, res) {
+async function handler(req, res) {
   // Set CORS headers for preflight requests
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
@@ -424,4 +422,6 @@ If you have any questions, just reply to this email.
       }
     }
   }
-} 
+}
+
+module.exports = handler; 
