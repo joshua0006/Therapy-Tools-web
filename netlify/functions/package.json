@@ -4,6 +4,9 @@
   "description": "Serverless functions for Therapy Tools API",
   "main": "send-pdf-pages.js",
   "dependencies": {
-    "nodemailer": "^6.9.1"
+    "firebase-admin": "^13.2.0",
+    "node-fetch": "^2.7.0",
+    "nodemailer": "^6.9.1",
+    "pdf-lib": "^1.17.1"
   }
-} 
+}

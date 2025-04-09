@@ -27,6 +27,7 @@ import ApiTestPage from './components/ApiTestPage'
 import ResourceFinder from './components/ResourceFinder'
 import SessionManager from './components/SessionManager'
 import ViewSelectedPages from './components/ViewSelectedPages'
+import GuestPdfViewer from './components/GuestPdfViewer'
 
 // Error boundary component to catch errors
 const ErrorFallback: React.FC<FallbackProps> = ({ error, resetErrorBoundary }) => {
@@ -102,6 +103,7 @@ const AppContent: React.FC = () => {
           <Route path="/resource-finder" element={<ResourceFinder />} />
           <Route path="/api-test" element={<ApiTestPage />} />
           <Route path="/view/:selectionId" element={<ViewSelectedPages />} />
+          <Route path="/guest-view/:sessionId" element={<GuestPdfViewer />} />
         </Routes>
       </Suspense>
     </>

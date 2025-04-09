@@ -8,7 +8,8 @@
     "build": "tsc -b && vite build",
     "lint": "eslint .",
     "preview": "vite preview",
-    "api": "node src/api/index.cjs"
+    "api": "node src/api/index.cjs",
+    "netlify:dev": "netlify dev"
   },
   "dependencies": {
     "@emailjs/browser": "^4.4.1",

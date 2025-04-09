@@ -1062,27 +1062,39 @@ const ResourceDetailPage: React.FC = () => {
         return;
       }
       
-      // Don't send thumbnails - let the server generate high-quality images
-      toast.success('Preparing high-quality images for your email...', { duration: 3000 });
+      // Only select a smaller set of pages if there are many selected to prevent timeouts
+      let optimizedSelectedPages = selectedPages;
+      if (selectedPages.length > 5) {
+        optimizedSelectedPages = selectedPages.slice(0, 5);
+        toast.error(`Sending only the first 5 selected pages to avoid timeouts. Selected: ${optimizedSelectedPages.join(', ')}`, { duration: 4000 });
+      }
       
-      // Use our email service instead of direct API call without sending thumbnails
+      // Let the user know we're working on their request
+      toast.success('Preparing your email...', { duration: 3000 });
+      
+      // Use our email service without sending thumbnails
       const result = await sendPdfPagesViaEmail(
         emailAddress,
         resourceId || '',
         previewPdfDetails?.url,
         previewPdfDetails?.name,
-        selectedPages,
+        optimizedSelectedPages,
         [] // Empty array - don't send thumbnails, let server generate high-quality images
       );
       
       if (!result.success) {
-        // Show a more specific error message if it's a server connection issue
-        if (result.message.includes('Unable to connect to email server')) {
+        // Handle different error types with appropriate messages
+        if (result.message.includes('timeout') || result.message.includes('too long')) {
+          toast.error('The email server is taking too long to respond. Please try again with fewer pages.', {
+            duration: 7000
+          });
+          setEmailError('Server timeout. Try selecting fewer pages (1-3) or try again later.');
+        } else if (result.message.includes('Unable to connect') || result.message.includes('not running')) {
           toast.error('Failed to connect to email server. Please check if the API server is running.', {
             duration: 5000
           });
-          console.error('API server connection failed. Make sure the server is running on port 3002.');
-          setEmailError('API server not available. Please try again later or contact support.');
+          console.error('API server connection failed. Make sure the server is running.');
+          setEmailError('Email server not available. Please try again later.');
           // Update the server status state
           setIsApiServerAvailable(false);
         } else {
@@ -1093,7 +1105,10 @@ const ResourceDetailPage: React.FC = () => {
       
       // Show success message
       setEmailSent(true);
-      toast.success('PDF pages sent with high-quality images to your email successfully!');
+      toast.success('PDF pages sent! Check your email inbox.', { 
+        duration: 5000,
+        icon: '📧'
+      });
       
       // Reset selection after successful email
       setSelectedPages([]);
